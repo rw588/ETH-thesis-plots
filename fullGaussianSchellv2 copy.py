@@ -53,7 +53,6 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Slider, Button
 from matplotlib.colors import PowerNorm
-from concurrent.futures import ThreadPoolExecutor
 
 # ── Backend ───────────────────────────────────────────────────────────────────
 try:
@@ -168,34 +167,26 @@ def compute_coherent(M: int, f: float,
     """
     Coherent spherical-wave Talbot pattern (source at R=L, ρ=L/z_T).
 
-    E[z,x] = Σ_m a_m · exp(i·2π·m²·u(z)·z) · exp(i·2π·m·u(z)·x)
-    where u(z) = 1 + z/ρ.  I = |E|².
+    I = |Σ_m a_m exp(i·2πm·(1+ζ/ρ)·(ξ + m·ζ))|²
 
-    Fully vectorised — no Python loop over m.
+    This reduces to the plane-wave result for ρ→∞.
+    Self-images at ζ(1+ζ/ρ) = integer.
     """
     t0 = time.perf_counter()
     rho_eff = rho if (np.isfinite(rho) and abs(rho) > 1e-8) else 1e18
-    m_vals, a_vals = grating_coeffs(M, f)   # (K,)
+    m_vals, a_vals = grating_coeffs(M, f)
 
-    z  = xp.asarray(zeta)   # (Nz,)
-    xi_d = xp.asarray(xi)   # (Nx,)
-    m_xp = xp.asarray(m_vals)   # (K,)
-    a_xp = xp.asarray(a_vals)   # (K,)
+    z2    = xp.asarray(zeta[:, None])           # (Nz,1)
+    x2    = xp.asarray(xi[None, :])             # (1,Nx)
+    field = xp.zeros((len(zeta), len(xi)), dtype=xp.complex128)
 
-    u = 1.0 + z / rho_eff                                            # (Nz,)
-    # w[m, z] = a_m · exp(i·2π·m²·u(z)·z)
-    w = a_xp[:, None] * xp.exp(
-        1j * 2.0 * np.pi * m_xp[:, None]**2 * u[None, :] * z[None, :]
-    )                                                                 # (K, Nz)
-    # k_eff[m, z] = 2π·m·u(z)
-    k_eff = 2.0 * np.pi * m_xp[:, None] * u[None, :]                # (K, Nz) real
+    for m, a in zip(m_vals, a_vals):
+        # phase = 2π·m·(1+ζ/ρ)·(ξ + m·ζ)
+        mag    = 1.0 + z2 / rho_eff             # (Nz,1)
+        phase  = 2.0 * np.pi * m * mag * (x2 + m * z2)
+        field += a * xp.exp(1j * phase)
 
-    # E[z, x] = Σ_m w[m,z] · exp(i·k_eff[m,z]·x)
-    # exp_term[m, z, x]: for K=17, Nz=500, Nx=380 → ~51 MB — acceptable
-    exp_term = xp.exp(1j * k_eff[:, :, None] * xi_d[None, None, :]) # (K, Nz, Nx)
-    E = (w[:, :, None] * exp_term).sum(axis=0)                       # (Nz, Nx)
-
-    I = xp.abs(E)**2
+    I = xp.abs(field)**2
     if xp is not np:
         I = xp.asnumpy(I)
     print(f"  coherent (spherical ρ={rho_eff:.2g}): {time.perf_counter()-t0:.2f}s")
@@ -206,72 +197,52 @@ def compute_gsm(M: int, f: float,
                 s_IL: float, s_cL: float, rho: float,
                 xi: np.ndarray, zeta: np.ndarray):
     """
-    GSM post-grating intensity — fully vectorised, no Python loop over (m,n).
+    GSM post-grating intensity – K²-outer-loop kernel (GPU-friendly).
 
-    Strategy:
-      1. Precompute B[k,z] and phi[k,z] for all K² pairs simultaneously.
-      2. I[z,x] = Re[Σ_k B[k,z] · exp(phi[k,z]·x)] · env[x]
-         evaluated in x-chunks to cap memory at ~80 MB per chunk.
+    Loops over (m,n) pairs; accumulates full (Nz,Nx) array each iteration.
+
+    I(ξ,ζ) = exp(−ξ²/2s_IL²) · Re[Σ_{m,n} a_m a_n · T1·T2·T3·T4·T5]
+
+    T1·T3 combined as exp(φ(ζ)·ξ) where:
+      φ = i2π[(m−n)+(m+n)ζ/ρ] − (m−n)ζ/s_IL²
     """
     t0 = time.perf_counter()
     rho_eff = rho if (np.isfinite(rho) and abs(rho) > 1e-8) else 1e18
     m_vals, a_vals = grating_coeffs(M, f)
 
-    # ── All (m,n) pair quantities — precomputed once ─────────────────────────
-    mg, ng   = np.meshgrid(m_vals, m_vals, indexing='ij')   # (K,K)
-    amn_f    = (a_vals[:, None] * a_vals[None, :]).ravel()  # (K²,)
-    p_f      = (mg - ng).ravel()          # m − n
-    q_f      = (mg + ng).ravel()          # m + n
-    pq_f     = (p_f * q_f)               # m² − n²
-    ms_pns_f = (mg**2 + ng**2).ravel()   # m² + n²
+    mg, ng  = np.meshgrid(m_vals, m_vals, indexing='ij')
+    amn_f   = (a_vals[:, None] * a_vals[None, :]).ravel()
+    p_f     = (mg - ng).ravel()
+    q_f     = (mg + ng).ravel()
+    msq_f   = (mg**2).ravel()
+    nsq_f   = (ng**2).ravel()
 
-    # Drop negligible pairs
-    mask     = np.abs(amn_f) > 1e-14
-    amn_f    = amn_f[mask];  p_f = p_f[mask];  q_f = q_f[mask]
-    pq_f     = pq_f[mask];   ms_pns_f = ms_pns_f[mask]
-    KK       = len(amn_f)
+    z     = xp.asarray(zeta)
+    xi_d  = xp.asarray(xi)
+    env   = xp.exp(-xi_d**2 / (2.0 * s_IL**2))
+    I_out = xp.zeros((len(zeta), len(xi)), dtype=xp.float64)
 
-    # ── To device ────────────────────────────────────────────────────────────
-    z        = xp.asarray(zeta)           # (Nz,)
-    xi_d     = xp.asarray(xi)            # (Nx,)
-    amn_xp   = xp.asarray(amn_f)         # (KK,)
-    p_xp     = xp.asarray(p_f)
-    q_xp     = xp.asarray(q_f)
-    pq_xp    = xp.asarray(pq_f)
-    ms_ns_xp = xp.asarray(ms_pns_f)
+    for k in range(len(amn_f)):
+        amn_k = float(amn_f[k])
+        if abs(amn_k) < 1e-14:
+            continue
+        p  = float(p_f[k]);  q  = float(q_f[k])
+        ms = float(msq_f[k]); ns = float(nsq_f[k])
 
-    z2 = z[None, :]   # (1, Nz) for broadcasting against (KK, 1)
+        T2  = xp.exp(1j * 2.0 * np.pi * z * (ms - ns) * (1.0 + z / rho_eff))
+        T4  = xp.exp(-(ms + ns) * z**2 / s_IL**2)
+        T5  = xp.exp(-2.0 * q**2 * z**2 / s_cL**2)
+        B   = amn_k * T2 * T4 * T5
 
-    # ── B[k, z] = amn · T2 · T4 · T5 ────────────────────────────────────────
-    T2    = xp.exp(1j * 2.0*np.pi * pq_xp[:, None] * z2 * (1.0 + z2 / rho_eff))
-    T4    = xp.exp(-ms_ns_xp[:, None] * z2**2 / s_IL**2)
-    T5    = xp.exp(-2.0 * q_xp[:, None]**2 * z2**2 / s_cL**2)
-    B_all = amn_xp[:, None] * T2 * T4 * T5                          # (KK, Nz)
-
-    # ── phi[k, z] = i2π(p + q·z/ρ) − p·z/s_IL² ─────────────────────────────
-    phi_all = (1j*2.0*np.pi * (p_xp[:, None] + q_xp[:, None] * z2 / rho_eff)
-               - p_xp[:, None] * z2 / s_IL**2)                      # (KK, Nz)
-
-    # ── Envelope ─────────────────────────────────────────────────────────────
-    env   = xp.exp(-xi_d**2 / (2.0 * s_IL**2))                      # (Nx,)
-
-    # ── Sum over k, chunked over x to limit memory ───────────────────────────
-    # Chunk size 32: (KK=289, Nz=500, 32) × 16 B ≈ 74 MB peak
-    Nx    = len(xi)
-    I_out = xp.zeros((len(zeta), Nx))
-    CHUNK = 32
-    for x0 in range(0, Nx, CHUNK):
-        xi_c     = xi_d[x0:x0+CHUNK]                                 # (c,)
-        exp_term = xp.exp(phi_all[:, :, None] * xi_c[None, None, :]) # (KK, Nz, c)
-        I_out[:, x0:x0+CHUNK] = xp.real(
-            (B_all[:, :, None] * exp_term).sum(axis=0)               # (Nz, c)
-        )
+        phi = (1j * 2.0 * np.pi * (p + q * z / rho_eff)
+               - p * z / s_IL**2)
+        I_out += xp.real(B[:, None] * xp.exp(phi[:, None] * xi_d[None, :]))
 
     I_out *= env[None, :]
     if xp is not np:
         I_out = xp.asnumpy(I_out)
     print(f"  GSM      (ρ={rho_eff:.3g}): {time.perf_counter()-t0:.2f}s"
-          f"  KK={KK}  Nz={len(zeta)}")
+          f"  K²={len(amn_f)}  Nz={len(zeta)}")
     return np.maximum(I_out, 0.0)
 
 
@@ -603,33 +574,8 @@ def main():
               f"s_IL={s_IL:.3f}  s_cL={s_cL:.3f}  "
               f"window=[{z_min:.2g},{z_max:.2g}]z_T  M={M}  f={f:.2f}")
 
-        # Cache key — everything that affects the 2-D arrays (not z_sl)
-        phys_key = (int(M), round(f, 4), round(s_I0, 4), round(s_c0, 4),
-                    round(inv_r0, 5), round(L_norm, 4),
-                    round(xi_lim, 2), round(x_center, 1),
-                    round(z_min, 3), round(z_max, 3))
-
-        if phys_key == state.get("_phys_key") and state["I_coh"] is not None:
-            # Only the slice position changed — skip expensive recompute
-            xi    = state["xi"]
-            zeta  = state["zeta"]
-            zeta_L = state["zeta_L"]
-            I_coh = state["I_coh"]
-            I_gsm = state["I_gsm"]
-            iz = int(np.argmin(np.abs(zeta - z_sl)))
-            _draw_slice(ax_sl, xi, I_coh[iz], I_gsm[iz],
-                        zeta_L[iz], zeta[iz])
-            fig.canvas.draw_idle()
-            return
-
-        # Run coherent and GSM in parallel (numpy releases GIL for vectorised ops)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            fut_coh = pool.submit(compute_coherent, M, f, xi, zeta, rho_coh)
-            fut_gsm = pool.submit(compute_gsm, M, f, s_IL, s_cL, rho_gsm, xi, zeta)
-            I_coh = fut_coh.result()
-            I_gsm = fut_gsm.result()
-
-        state["_phys_key"] = phys_key
+        I_coh = compute_coherent(M, f, xi, zeta, rho_coh)
+        I_gsm = compute_gsm(M, f, s_IL, s_cL, rho_gsm, xi, zeta)
 
         peak_c = I_coh.max() or 1.0
         peak_g = I_gsm.max() or 1.0

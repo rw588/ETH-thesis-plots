@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microfluidic GSM Talbot Carpet</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #08080e; color: #ddddee; font-family: 'Consolas', monospace; font-size: 13px; padding: 10px; }
+  h2 { text-align: center; margin-bottom: 4px; font-size: 15px; letter-spacing: 1px; color: #aaccff; }
+  .subtitle { text-align: center; margin-bottom: 8px; font-size: 11px; color: #6688aa; letter-spacing: 0.3px; line-height: 1.5; }
+  .canvas-row { display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; }
+  .canvas-wrap { display: flex; flex-direction: column; align-items: center; }
+  .canvas-wrap label { font-size: 11px; color: #99aacc; margin-bottom: 3px; }
+  canvas { display: block; cursor: crosshair; border: 1px solid #333355; }
+  .bottom-row { display: flex; gap: 8px; margin-bottom: 8px; width: 100%; }
+  #infoPanel { border: 1px solid #333355; padding: 6px 12px; background: #0e0e1a; width: 100%; font-size: 11px; line-height: 1.4; }
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1px 16px; }
+  .info-head { grid-column: 1 / -1; font-weight: bold; color: #aaccff; margin-top: 4px; font-size: 11px; }
+  .info-kv { display: flex; gap: 4px; white-space: nowrap; }
+  .info-k { color: #99aacc; }
+  .info-v { color: #ffcc88; }
+  hr { border: none; border-top: 1px solid #334; margin: 8px 0; }
+  .controls { display: flex; gap: 20px; justify-content: center; }
+  .ctrl-col { display: flex; flex-direction: column; gap: 6px; min-width: 290px; }
+  .ctrl-col h3 { font-size: 12px; color: #aaccff; margin-bottom: 2px; }
+  .slider-row { display: flex; align-items: center; gap: 6px; }
+  .slider-row label { width: 190px; font-size: 12px; color: #ccccdd; text-align: right; }
+  .slider-row input[type=range] { flex: 1; accent-color: #5588ff; }
+  .slider-row span { width: 55px; text-align: right; font-size: 12px; color: #ffcc88; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ccccdd; }
+  .check-row input[type=checkbox] { accent-color: #5588ff; width: 14px; height: 14px; cursor: pointer; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
+  button { background: #1a1a2e; border: 1px solid #446; color: #ccddff; padding: 4px 10px; cursor: pointer; font-size: 12px; border-radius: 3px; }
+  button:hover { background: #2a2a4e; border-color: #668; }
+  button.active { background: #223355; border-color: #88aadd; color: #ffffff; }
+  #statusLine { text-align: center; margin-top: 8px; font-size: 12px; color: #88aacc; }
+  #resetBtn { background: #2a1a1a; border-color: #644; color: #ffbbbb; }
+  #resetBtn:hover { background: #3a2a2a; }
+</style>
+</head>
+<body>
+<h2>Gaussian-Schell Model &#8212; Microfluidic Talbot Carpet</h2>
+<div class="subtitle">
+  Microfluidic: &nbsp;I(x,L+z) = &sum;<sub>m,n</sub> a<sub>m</sub>a<sub>n</sub>
+  &sdot; [Talbot phase] &sdot; [s-envelope exp(&minus;(x&minus;sd)&sup2;/2&sigma;<sub>I</sub>&sup2;)]
+  &sdot; [q-filter exp(&minus;q&sup2;&zeta;&sup2;/2&sigma;<sub>c</sub>&sup2;)] &sdot; &sum;<sub>s</sub><br>
+  where &nbsp;p = m&minus;n &nbsp;(fringe order, slider), &nbsp;q = m+n &nbsp;(coherence term,
+  auto cutoff |q| &le; &lceil;3&sigma;<sub>c</sub>(L)/&zeta;&rceil; per z-plane),
+  &nbsp;s &nbsp;(source index, cutoff |x&minus;sd| &le; 3&sigma;<sub>I</sub>(L))
+</div>
+
+<div class="canvas-row">
+  <div class="canvas-wrap">
+    <label>Single source &nbsp;(s&nbsp;=&nbsp;0 only)</label>
+    <canvas id="ssCanvas" width="360" height="300"></canvas>
+  </div>
+  <div class="canvas-wrap">
+    <label>Microfluidic &nbsp;(all sources, &sum;<sub>s</sub>)</label>
+    <canvas id="mfCanvas"  width="360" height="300"></canvas>
+  </div>
+  <div class="canvas-wrap">
+    <label>Intensity slice</label>
+    <canvas id="sliceCanvas" width="340" height="300"></canvas>
+  </div>
+</div>
+
+<div class="bottom-row">
+  <div id="infoPanel">Loading&hellip;</div>
+</div>
+<hr>
+<div class="controls">
+  <div class="ctrl-col">
+    <h3>Grating &amp; Source (at plane L)</h3>
+    <div class="slider-row"><label>f &nbsp;(duty cycle)</label><input type="range" id="sl_f" min="0.05" max="0.95" step="0.01" value="0.5"><span id="v_f">0.50</span></div>
+    <div class="slider-row"><label>p<sub>max</sub> &nbsp;(fringe orders |m&minus;n|)</label><input type="range" id="sl_Pmax" min="1" max="30" step="1" value="8"><span id="v_Pmax">8</span></div>
+    <div class="slider-row"><label>&sigma;<sub>I</sub>(0)/d</label><input type="range" id="sl_sI0" min="0.3" max="30" step="0.1" value="3.0"><span id="v_sI0">3.00</span></div>
+    <div class="slider-row"><label>&sigma;<sub>c</sub>(0)/d</label><input type="range" id="sl_sc0" min="0.1" max="30" step="0.1" value="1.0"><span id="v_sc0">1.00</span></div>
+    <div class="slider-row"><label>z<sub>T</sub>/R(0) &nbsp;(input curvature)</label><input type="range" id="sl_invR0" min="-0.5" max="0.5" step="0.005" value="0"><span id="v_invR0">0.000</span></div>
+  </div>
+  <div class="ctrl-col">
+    <h3>View</h3>
+    <div class="btn-row" id="lBtns">
+      <button data-l="0.5">L=&frac12;z<sub>T</sub></button>
+      <button data-l="1">L=1z<sub>T</sub></button>
+      <button data-l="30">L=30z<sub>T</sub></button>
+      <button data-l="770">L=770z<sub>T</sub></button>
+    </div>
+    <div class="btn-row" id="xiBtns">
+      <button data-xi="5">&plusmn;5d</button>
+      <button data-xi="10">&plusmn;10d</button>
+      <button data-xi="20">&plusmn;20d</button>
+      <button data-xi="50">&plusmn;50d</button>
+    </div>
+    <div class="slider-row"><label>z<sub>min</sub>/z<sub>T</sub></label><input type="range" id="sl_zmin" min="0" max="800" step="0.5" value="0"><span id="v_zmin">0.0</span></div>
+    <div class="slider-row"><label>z<sub>max</sub>/z<sub>T</sub></label><input type="range" id="sl_zmax" min="0.1" max="800" step="0.5" value="1.5"><span id="v_zmax">1.5</span></div>
+    <div class="slider-row"><label>slice z/z<sub>T</sub></label><input type="range" id="sl_zsl" min="0" max="800" step="0.05" value="1.0"><span id="v_zsl">1.00</span></div>
+    <div class="btn-row"><button id="resetBtn">Reset</button></div>
+  </div>
+</div>
+<div id="statusLine">Ready.</div>
+
+<script>
+// ─── Colormaps ────────────────────────────────────────────────────────────────
+function makeColormap(stops) {
+  return function(v) {
+    if (v <= 0) return stops[0].slice(1);
+    if (v >= 1) return stops[stops.length-1].slice(1);
+    let i = 0;
+    while (i < stops.length-2 && v > stops[i+1][0]) i++;
+    const t0=stops[i][0], t1=stops[i+1][0], a=(v-t0)/(t1-t0);
+    return [
+      Math.round(stops[i][1]+a*(stops[i+1][1]-stops[i][1])),
+      Math.round(stops[i][2]+a*(stops[i+1][2]-stops[i][2])),
+      Math.round(stops[i][3]+a*(stops[i+1][3]-stops[i][3]))
+    ];
+  };
+}
+const magma  = makeColormap([[0,0,0,4],[0.25,79,18,123],[0.5,182,54,122],[0.75,237,148,75],[1,252,253,191]]);
+const viridis= makeColormap([[0,68,1,84],[0.25,59,82,139],[0.5,33,145,140],[0.75,94,201,98],[1,253,231,37]]);
+const inferno= makeColormap([[0,0,0,4],[0.25,87,15,110],[0.5,188,55,84],[0.75,239,138,34],[1,252,255,164]]);
+
+// ─── Worker ───────────────────────────────────────────────────────────────────
+const WORKER_SRC = `
+const TWO_PI = 2*Math.PI;
+
+function sinc(x){
+  if(Math.abs(x)<1e-12) return 1.0;
+  return Math.sin(Math.PI*x)/(Math.PI*x);
+}
+function gratingCoeffs(Pmax,f){
+  const am=new Array(2*Pmax+1);
+  for(let k=0;k<=2*Pmax;k++) am[k]=f*sinc((k-Pmax)*f);
+  return am;
+}
+function gsmPropagate(sI0,sc0,LNorm,invR0){
+  const sc0sq=Math.max(sc0*sc0,1e-40);
+  const pd=1.0/(4.0*sI0*sI0)+1.0/sc0sq;
+  let sILsq=sI0*sI0*(1-(LNorm*invR0)*(LNorm*invR0))+LNorm*LNorm*pd/(Math.PI*Math.PI);
+  sILsq=Math.max(sILsq,1e-12);
+  const sCLsq=Math.max(sc0sq*sILsq/(sI0*sI0),1e-12);
+  const rho=(LNorm>1e-12)? Math.PI*Math.PI*sILsq/(LNorm*pd) : Infinity;
+  return {sIL:Math.sqrt(sILsq), sCL:Math.sqrt(sCLsq), rho};
+}
+
+// Core inner loop: accumulate m,n contributions for one z-row into outRe[NX]
+// sourcesArr: array of integer source positions s (units of d)
+// gMasks[si], ixLos[si], ixHis[si]: precomputed per source
+function accumMN(Pmax, am, sIL2, sCL2, rhoEff, zeta,
+                 dx, x0, NX,
+                 sourcesArr, gMasks, ixLos, ixHis, outRe) {
+  const zetaAbs=Math.abs(zeta);
+  // q = m+n cutoff from coherence Gaussian: exp(-q^2*zeta^2/(2*sCL^2)) < exp(-4.5)
+  // => |q| > 3*sCL/|zeta|. Cap at 2*Pmax (natural limit of the sum).
+  const qMaxZ=(zetaAbs>1e-4) ? Math.min(2*Pmax, Math.ceil(3*Math.sqrt(sCL2)/zetaAbs)) : 2*Pmax;
+  const nSrc=sourcesArr.length;
+
+  for(let km=0;km<=2*Pmax;km++){
+    const m=km-Pmax;
+    for(let kn=0;kn<=2*Pmax;kn++){
+      const n=kn-Pmax;
+      // q cutoff: skip if coherence envelope is < exp(-4.5) at this z
+      if(Math.abs(m+n)>qMaxZ) continue;
+
+      const amn=am[km]*am[kn];
+      if(Math.abs(amn)<1e-15) continue;
+
+      // B amplitude: Talbot envelope (sIL) * coherence filter (sCL)
+      const Bamp=amn
+        *Math.exp(-(m*m+n*n)*zeta*zeta/(4*sIL2))
+        *Math.exp(-(m+n)*(m+n)*zeta*zeta/(2*sCL2));
+      if(Math.abs(Bamp)<1e-30) continue;
+
+      const tAngle=Math.PI*(m*m-n*n)*zeta*(1+zeta/rhoEff);
+      const BRe=Bamp*Math.cos(tAngle);
+      const BIm=Bamp*Math.sin(tAngle);
+
+      // phi = phiRe + i*phiIm gives the x-dependent fringe:
+      //   exp(phi*(x+s)) where phiRe damps envelope, phiIm gives fringe frequency
+      const phiRe=-(m-n)*zeta/(2*sIL2);
+      const phiIm=TWO_PI*((m-n)+(m+n)*zeta/rhoEff);
+
+      // Complex step increment per pixel
+      const stepMag=Math.exp(phiRe*dx);
+      const stepAng=phiIm*dx;
+      const stepCos=stepMag*Math.cos(stepAng);
+      const stepSin=stepMag*Math.sin(stepAng);
+
+      for(let si=0;si<nSrc;si++){
+        const mask=gMasks[si];
+        if(!mask) continue;
+        const s=sourcesArr[si];
+        const ilo=ixLos[si], ihi=ixHis[si];
+
+        // Source at s contributes I_0(x-s): C_s = B * exp(-phi*s)
+        // so that C_s * exp(phi*x) = B * exp(phi*(x-s))
+        const sMag=Math.exp(-phiRe*s);
+        const sAng=-phiIm*s;
+        const cosS=Math.cos(sAng), sinS=Math.sin(sAng);
+        const CRe=sMag*(BRe*cosS-BIm*sinS);
+        const CIm=sMag*(BRe*sinS+BIm*cosS);
+
+        // Start phasor at pixel ilo: C_s * exp(phi*x_ilo)
+        const xStart=x0+ilo*dx;
+        const stMag=Math.exp(phiRe*xStart);
+        const stAng=phiIm*xStart;
+        let pRe=stMag*(CRe*Math.cos(stAng)-CIm*Math.sin(stAng));
+        let pIm=stMag*(CRe*Math.sin(stAng)+CIm*Math.cos(stAng));
+
+        const len=ihi-ilo+1;
+        for(let k=0;k<len;k++){
+          outRe[ilo+k]+=pRe*mask[k];
+          const nr=pRe*stepCos-pIm*stepSin;
+          const ni=pRe*stepSin+pIm*stepCos;
+          pRe=nr; pIm=ni;
+        }
+      }
+    }
+  }
+}
+
+// Build source list + Gaussian masks for a given set of integer source positions
+function buildMasks(sourcesArr, sIL, dx, x0, NX) {
+  const sIL2=sIL*sIL;
+  const nSrc=sourcesArr.length;
+  const gMasks=new Array(nSrc);
+  const ixLos=new Int32Array(nSrc);
+  const ixHis=new Int32Array(nSrc);
+  for(let si=0;si<nSrc;si++){
+    const s=sourcesArr[si];
+    const lo=Math.max(0,   Math.ceil( (s-3*sIL-x0)/dx));
+    const hi=Math.min(NX-1,Math.floor((s+3*sIL-x0)/dx));
+    ixLos[si]=lo; ixHis[si]=hi;
+    if(lo<=hi){
+      const mask=new Float32Array(hi-lo+1);
+      for(let ix=lo;ix<=hi;ix++){
+        const u=x0+ix*dx-s;
+        mask[ix-lo]=Math.exp(-u*u/(2*sIL2));
+      }
+      gMasks[si]=mask;
+    } else { gMasks[si]=null; }
+  }
+  return {gMasks, ixLos, ixHis};
+}
+
+function computeMicrofluidic(Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax){
+  const am=gratingCoeffs(Pmax,f);
+  const {sIL,sCL,rho}=gsmPropagate(sI0,sc0,LNorm,invR0);
+  const rhoEff=(!isFinite(rho)||Math.abs(rho)<1e-8)?1e18:rho;
+  const dx=2*xiHalf/(NX-1);
+  const dz=(zmax-zmin)/(NZ-1);
+  const x0=-xiHalf;
+  const sIL2=sIL*sIL, sCL2=sCL*sCL;
+
+  // All sources within 3*sIL of the view window
+  const S_lo=Math.floor(x0-3*sIL);
+  const S_hi=Math.ceil( x0+2*xiHalf+3*sIL);
+  const sourcesAll=[];
+  for(let s=S_lo;s<=S_hi;s++) sourcesAll.push(s);
+
+  const {gMasks,ixLos,ixHis}=buildMasks(sourcesAll,sIL,dx,x0,NX);
+  const mfArr=new Float32Array(NZ*NX);
+
+  for(let iz=0;iz<NZ;iz++){
+    const zeta=zmin+iz*dz;
+    const outRe=new Float64Array(NX);
+    accumMN(Pmax,am,sIL2,sCL2,rhoEff,zeta,dx,x0,NX,sourcesAll,gMasks,ixLos,ixHis,outRe);
+    for(let ix=0;ix<NX;ix++) mfArr[iz*NX+ix]=Math.max(0,outRe[ix]);
+  }
+  return {mfArr, sIL, sCL, rho, S_lo, S_hi};
+}
+
+function computeSingleSource(Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax){
+  const am=gratingCoeffs(Pmax,f);
+  const {sIL,sCL,rho}=gsmPropagate(sI0,sc0,LNorm,invR0);
+  const rhoEff=(!isFinite(rho)||Math.abs(rho)<1e-8)?1e18:rho;
+  const dx=2*xiHalf/(NX-1);
+  const dz=(zmax-zmin)/(NZ-1);
+  const x0=-xiHalf;
+  const sIL2=sIL*sIL, sCL2=sCL*sCL;
+
+  // Only s=0
+  const sourcesOne=[0];
+  const {gMasks,ixLos,ixHis}=buildMasks(sourcesOne,sIL,dx,x0,NX);
+  const ssArr=new Float32Array(NZ*NX);
+
+  for(let iz=0;iz<NZ;iz++){
+    const zeta=zmin+iz*dz;
+    const outRe=new Float64Array(NX);
+    accumMN(Pmax,am,sIL2,sCL2,rhoEff,zeta,dx,x0,NX,sourcesOne,gMasks,ixLos,ixHis,outRe);
+    for(let ix=0;ix<NX;ix++) ssArr[iz*NX+ix]=Math.max(0,outRe[ix]);
+  }
+  return {ssArr};
+}
+
+// GSM reference: continuous Gaussian beam (no discrete sources)
+function computeGSM(Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax){
+  const am=gratingCoeffs(Pmax,f);
+  const {sIL,sCL,rho}=gsmPropagate(sI0,sc0,LNorm,invR0);
+  const rhoEff=(!isFinite(rho)||Math.abs(rho)<1e-8)?1e18:rho;
+  const dx=2*xiHalf/(NX-1);
+  const dz=(zmax-zmin)/(NZ-1);
+  const x0=-xiHalf;
+  const sIL2=sIL*sIL, sCL2=sCL*sCL;
+  const gsmArr=new Float32Array(NZ*NX);
+
+  for(let iz=0;iz<NZ;iz++){
+    const zeta=zmin+iz*dz;
+    const zetaAbs=Math.abs(zeta);
+    const qMaxZ=(zetaAbs>1e-4)?Math.min(2*Pmax,Math.ceil(3*Math.sqrt(sCL2)/zetaAbs)):2*Pmax;
+    const gsmRe=new Float64Array(NX);
+    for(let km=0;km<=2*Pmax;km++){
+      const m=km-Pmax;
+      for(let kn=0;kn<=2*Pmax;kn++){
+        const n=kn-Pmax;
+        if(Math.abs(m+n)>qMaxZ) continue;
+        const amn=am[km]*am[kn];
+        if(Math.abs(amn)<1e-15) continue;
+        const Bamp=amn
+          *Math.exp(-(m*m+n*n)*zeta*zeta/sIL2)
+          *Math.exp(-2*(m+n)*(m+n)*zeta*zeta/sCL2);
+        if(Math.abs(Bamp)<1e-30) continue;
+        const BphA=TWO_PI*(m*m-n*n)*zeta*(1+zeta/rhoEff);
+        const BRe=Bamp*Math.cos(BphA);
+        const BIm=Bamp*Math.sin(BphA);
+        const phiRe=-(m-n)*zeta/sIL2;
+        const phiIm=TWO_PI*((m-n)+(m+n)*zeta/rhoEff);
+        const ang0=phiIm*x0;
+        const eX0Re=Math.exp(phiRe*x0)*Math.cos(ang0);
+        const eX0Im=Math.exp(phiRe*x0)*Math.sin(ang0);
+        const stMag=Math.exp(phiRe*dx);
+        const stAng=phiIm*dx;
+        const stRe=stMag*Math.cos(stAng), stIm=stMag*Math.sin(stAng);
+        let pRe=BRe*eX0Re-BIm*eX0Im;
+        let pIm=BRe*eX0Im+BIm*eX0Re;
+        for(let ix=0;ix<NX;ix++){
+          gsmRe[ix]+=pRe;
+          const nr=pRe*stRe-pIm*stIm;
+          const ni=pRe*stIm+pIm*stRe;
+          pRe=nr; pIm=ni;
+        }
+      }
+    }
+    for(let ix=0;ix<NX;ix++){
+      const x=x0+ix*dx;
+      const env=Math.exp(-x*x/(2*sIL2));
+      gsmArr[iz*NX+ix]=Math.max(0,env*gsmRe[ix]);
+    }
+  }
+  return {gsmArr};
+}
+
+self.onmessage=function(e){
+  const{Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax}=e.data;
+  const t0=Date.now();
+  const mr=computeMicrofluidic(Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax);
+  const sr=computeSingleSource(Pmax,f,sI0,sc0,LNorm,invR0,NZ,NX,xiHalf,zmin,zmax);
+  const dt=Date.now()-t0;
+  self.postMessage({
+    mfArr:mr.mfArr.buffer, ssArr:sr.ssArr.buffer,
+    sIL:mr.sIL, sCL:mr.sCL, rho:mr.rho,
+    S_lo:mr.S_lo, S_hi:mr.S_hi, dt
+  },[mr.mfArr.buffer, sr.ssArr.buffer]);
+};
+`;
+
+const workerBlob=new Blob([WORKER_SRC],{type:'application/javascript'});
+const workerURL=URL.createObjectURL(workerBlob);
+let worker=new Worker(workerURL);
+
+// ─── State ────────────────────────────────────────────────────────────────────
+const NX=1024, NZ=400;
+const DEFAULTS={f:0.5,Pmax:8,sI0:3.0,sc0:1.0,invR0:0,zmin:0,zmax:1.5,zsl:1.0,xiHalf:10,LNorm:1.0};
+let state={...DEFAULTS};
+let lastResult=null, computing=false, pendingCompute=false, lastPhysKey=null;
+function physicsKey(s){return`${s.f}|${s.Pmax}|${s.sI0}|${s.sc0}|${s.invR0}|${s.LNorm}|${s.zmin}|${s.zmax}|${s.xiHalf}`;}
+
+// ─── Sliders ──────────────────────────────────────────────────────────────────
+const sliders={
+  f:    ['sl_f',    'v_f',    v=>v.toFixed(2)],
+  Pmax: ['sl_Pmax', 'v_Pmax', v=>v.toFixed(0)],
+  sI0:  ['sl_sI0',  'v_sI0',  v=>v.toFixed(2)],
+  sc0:  ['sl_sc0',  'v_sc0',  v=>v.toFixed(2)],
+  invR0:['sl_invR0','v_invR0',v=>v.toFixed(3)],
+  zmin: ['sl_zmin', 'v_zmin', v=>v.toFixed(1)],
+  zmax: ['sl_zmax', 'v_zmax', v=>v.toFixed(1)],
+  zsl:  ['sl_zsl',  'v_zsl',  v=>v.toFixed(2)],
+};
+for(const [key,[sid,vid,fmt]] of Object.entries(sliders)){
+  const sl=document.getElementById(sid), vl=document.getElementById(vid);
+  sl.addEventListener('input',()=>{
+    state[key]=parseFloat(sl.value);
+    vl.textContent=fmt(state[key]);
+    if(key==='zsl'){if(lastResult)renderAll();} else scheduleCompute();
+  });
+}
+
+
+document.getElementById('lBtns').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const L=parseFloat(btn.dataset.l);
+    state.LNorm=L;
+    document.querySelectorAll('#lBtns button').forEach(b=>b.classList.toggle('active',b===btn));
+    setSlider('zmin',0);
+    setSlider('zmax',Math.max(0.1,Math.round(L*1.5*2)/2));
+    setSlider('zsl',L);
+    scheduleCompute();
+  });
+});
+document.getElementById('xiBtns').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    state.xiHalf=parseFloat(btn.dataset.xi);
+    document.querySelectorAll('#xiBtns button').forEach(b=>b.classList.toggle('active',b===btn));
+    scheduleCompute();
+  });
+});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  for(const [key,[sid,vid,fmt]] of Object.entries(sliders)){
+    if(DEFAULTS[key]!==undefined){
+      state[key]=DEFAULTS[key];
+      document.getElementById(sid).value=DEFAULTS[key];
+      document.getElementById(vid).textContent=fmt(DEFAULTS[key]);
+    }
+  }
+  state.xiHalf=DEFAULTS.xiHalf; state.LNorm=DEFAULTS.LNorm;
+  document.querySelectorAll('#lBtns button').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.l)===DEFAULTS.LNorm));
+  document.querySelectorAll('#xiBtns button').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.xi)===DEFAULTS.xiHalf));
+  scheduleCompute();
+});
+document.querySelectorAll('#lBtns button').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.l)===DEFAULTS.LNorm));
+document.querySelectorAll('#xiBtns button').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.xi)===DEFAULTS.xiHalf));
+
+function setSlider(key,val){
+  const[sid,vid,fmt]=sliders[key];
+  state[key]=val;
+  document.getElementById(sid).value=val;
+  document.getElementById(vid).textContent=fmt(val);
+}
+
+['mfCanvas','ssCanvas'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{
+    const rect=e.target.getBoundingClientRect();
+    const fracY=1-(e.clientY-rect.top)/rect.height;
+    const zval=state.zmin+fracY*(state.zmax-state.zmin);
+    setSlider('zsl',Math.max(0,Math.min(800,parseFloat(zval.toFixed(2)))));
+    if(lastResult) renderAll();
+  });
+});
+
+// ─── Compute ──────────────────────────────────────────────────────────────────
+function scheduleCompute(){if(computing){pendingCompute=true;return;}doCompute();}
+function doCompute(){
+  computing=true; pendingCompute=false;
+  const key=physicsKey(state);
+  if(key===lastPhysKey&&lastResult){computing=false;renderAll();return;}
+  document.getElementById('statusLine').textContent='Computing\u2026';
+  worker.postMessage({
+    Pmax:state.Pmax, f:state.f, sI0:state.sI0, sc0:state.sc0,
+    LNorm:state.LNorm, invR0:state.invR0, NZ, NX,
+    xiHalf:state.xiHalf, zmin:state.zmin, zmax:state.zmax,
+  });
+}
+worker.onerror=function(e){computing=false;document.getElementById('statusLine').textContent='Worker error: '+e.message;};
+worker.onmessage=function(e){
+  const{mfArr,ssArr,sIL,sCL,rho,S_lo,S_hi,dt}=e.data;
+  lastResult={
+    mf:new Float32Array(mfArr), ss:new Float32Array(ssArr),
+    sIL,sCL,rho,S_lo,S_hi,
+    zmin:state.zmin,zmax:state.zmax,xiHalf:state.xiHalf
+  };
+  lastPhysKey=physicsKey(state); computing=false;
+  const qAtZmax=(state.zmax>0.01)?Math.ceil(3*sCL/state.zmax):'—';
+  document.getElementById('statusLine').textContent=
+    `Done (${dt}\u202fms) | s\u2208[${S_lo},${S_hi}] (${S_hi-S_lo+1}\u202fsrcs, 3\u03c3_I) | q_max(z_max)=${qAtZmax} (3\u03c3_c/\u03b6)`;
+  renderAll();
+  if(pendingCompute) doCompute();
+};
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+function renderCarpet(canvasId,data,cmap){
+  const canvas=document.getElementById(canvasId);
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  const img=ctx.createImageData(W,H);
+  const d=img.data;
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<data.length;i++){if(data[i]<mn)mn=data[i];if(data[i]>mx)mx=data[i];}
+  const range=mx-mn||1;
+  for(let row=0;row<H;row++){
+    const iz=Math.floor((H-1-row)/(H-1)*(NZ-1));
+    for(let col=0;col<W;col++){
+      const ix=Math.floor(col/(W-1)*(NX-1));
+      let v=(data[iz*NX+ix]-mn)/range;
+      v=Math.sqrt(Math.max(0,v));
+      const [r,g,b]=cmap(v);
+      const idx=(row*W+col)*4;
+      d[idx]=r;d[idx+1]=g;d[idx+2]=b;d[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  const{zmin,zmax}=lastResult;
+  const fracZ=(state.zsl-zmin)/(zmax-zmin);
+  const lineY=Math.round((1-fracZ)*(H-1));
+  ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,lineY); ctx.lineTo(W,lineY); ctx.stroke();
+  const xiH=lastResult.xiHalf;
+  ctx.fillStyle='#ffffffaa'; ctx.font='10px Consolas';
+  ctx.textAlign='left';  ctx.fillText(`x=${(-xiH).toFixed(0)}d`,3,H-3);
+  ctx.textAlign='right'; ctx.fillText(`x=${(xiH).toFixed(0)}d`,W-3,H-3);
+  ctx.save(); ctx.translate(W-3,H-5); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='right'; ctx.fillText(`z=${zmin.toFixed(1)}`,0,0);
+  ctx.textAlign='left';  ctx.fillText(`z=${zmax.toFixed(1)}`,-(H-10),0);
+  ctx.restore();
+}
+
+function renderSlice(){
+  const canvas=document.getElementById('sliceCanvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#0a0a14'; ctx.fillRect(0,0,W,H);
+  if(!lastResult) return;
+  const{mf,ss,zmin,zmax}=lastResult;
+  const fracZ=(state.zsl-zmin)/(zmax-zmin);
+  const iz=Math.round(Math.max(0,Math.min(1,fracZ))*(NZ-1));
+  const mfS=mf.slice(iz*NX,(iz+1)*NX);
+  const ssS=ss.slice(iz*NX,(iz+1)*NX);
+
+  function stats(arr){
+    let mx=0,mn=Infinity;
+    for(let i=0;i<NX;i++){if(arr[i]>mx)mx=arr[i];if(arr[i]<mn)mn=arr[i];}
+    if(mx===0)mx=1;
+    const C=(mx+mn>0)?(mx-mn)/(mx+mn):0;
+    return{mx,C};
+  }
+  const sss=stats(ssS), smf=stats(mfS);
+
+  const pad={l:40,r:15,t:25,b:35};
+  const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+  const toX=i=>pad.l+(i/(NX-1))*pw;
+  const toY=v=>pad.t+ph*(1-v);
+  function fill(data,mx,col){
+    ctx.save(); ctx.beginPath();
+    ctx.moveTo(toX(0),toY(0));
+    for(let i=0;i<NX;i++) ctx.lineTo(toX(i),toY(data[i]/mx));
+    ctx.lineTo(toX(NX-1),toY(0)); ctx.closePath();
+    ctx.globalAlpha=0.14; ctx.fillStyle=col; ctx.fill(); ctx.restore();
+  }
+  function line(data,mx,col){
+    ctx.beginPath(); ctx.strokeStyle=col; ctx.lineWidth=1.5;
+    for(let i=0;i<NX;i++){const x=toX(i),y=toY(data[i]/mx);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();
+  }
+
+  fill(ssS,sss.mx,'#50c8b0'); line(ssS,sss.mx,'#50c8b0');
+  fill(mfS,smf.mx,'#c060ff'); line(mfS,smf.mx,'#c060ff');
+
+  ctx.strokeStyle='#445566'; ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+ph); ctx.lineTo(pad.l+pw,pad.t+ph);
+  ctx.stroke();
+  ctx.fillStyle='#aabbcc'; ctx.font='11px Consolas';
+  const xiH=lastResult.xiHalf;
+  ctx.textAlign='center';
+  ctx.fillText(`${(-xiH).toFixed(0)}d`,pad.l,H-5);
+  ctx.fillText('0d',pad.l+pw/2,H-5);
+  ctx.fillText(`${(xiH).toFixed(0)}d`,pad.l+pw,H-5);
+  ctx.fillText('x/d',pad.l+pw/2,H-18);
+  ctx.textAlign='right';
+  ctx.fillText('I/I\u2080',pad.l-3,pad.t+8);
+  ctx.fillText('0',pad.l-3,pad.t+ph);
+  ctx.fillText('1',pad.l-3,pad.t+4);
+  ctx.textAlign='center'; ctx.fillStyle='#ccddee';
+  ctx.fillText(`Slice z/z\u1D57 = ${state.zsl.toFixed(2)}`,pad.l+pw/2,pad.t-7);
+  // Legend: left canvas (teal) then centre canvas (purple)
+  ctx.font='10px Consolas'; ctx.textAlign='left';
+  [['#50c8b0', `Single src (s=0)  C=${sss.C.toFixed(3)}`],
+   ['#c060ff', `Microfluidic (\u03a3s)  C=${smf.C.toFixed(3)}`]
+  ].forEach(([col,txt],i)=>{
+    ctx.fillStyle=col; ctx.fillRect(pad.l+4,pad.t+5+i*13,12,3);
+    ctx.fillStyle='#aabbcc'; ctx.fillText(txt,pad.l+19,pad.t+9+i*13);
+  });
+}
+
+function kv(k,v){ return `<div class="info-kv"><span class="info-k">${k}</span><span class="info-v">${v}</span></div>`; }
+
+function renderInfo(){
+  if(!lastResult) return;
+  const{sIL,sCL,rho,S_lo,S_hi}=lastResult;
+  const rhoStr=isFinite(rho)?rho.toFixed(3):'&infin;';
+  const qAtZmax=(state.zmax>0.01)?Math.ceil(3*sCL/state.zmax):'&infin;';
+  document.getElementById('infoPanel').innerHTML=`<div class="info-grid">
+    <div class="info-head">Source &amp; Grating (L=${state.LNorm}z<sub>T</sub>)</div>
+    ${kv('f =', state.f.toFixed(2))}
+    ${kv('p<sub>max</sub> =', state.Pmax)}
+    ${kv('&sigma;<sub>I</sub>(0)/d =', state.sI0.toFixed(2))}
+    ${kv('&sigma;<sub>c</sub>(0)/d =', state.sc0.toFixed(2))}
+    ${kv('z<sub>T</sub>/R(0) =', state.invR0.toFixed(3))}
+    <div class="info-head">Propagated to grating</div>
+    ${kv('&sigma;<sub>I</sub>(L)/d =', sIL.toFixed(4))}
+    ${kv('&sigma;<sub>c</sub>(L)/d =', sCL.toFixed(4))}
+    ${kv('&rho;/z<sub>T</sub> =', rhoStr)}
+    <div class="info-head">3&sigma; cutoffs (physics-derived)</div>
+    ${kv('s &isin;', `[${S_lo},&thinsp;${S_hi}] (${S_hi-S_lo+1} srcs)`)}
+    ${kv('q<sub>max</sub>(z<sub>max</sub>) =', qAtZmax)}
+    ${kv('q condition:', '|m+n|&zeta; &le; 3&sigma;<sub>c</sub>(L)')}
+    <div class="info-head">View</div>
+    ${kv('z:', `[${state.zmin.toFixed(1)},&thinsp;${state.zmax.toFixed(1)}] z<sub>T</sub>`)}
+    ${kv('x:', `&plusmn;${state.xiHalf}d`)}
+    ${kv('slice:', `z=${state.zsl.toFixed(2)} z<sub>T</sub>`)}
+  </div>`;
+}
+
+function renderAll(){
+  if(!lastResult) return;
+  renderCarpet('ssCanvas',  lastResult.ss,  viridis);
+  renderCarpet('mfCanvas', lastResult.mf, magma);
+  renderSlice();
+  renderInfo();
+}
+
+scheduleCompute();
+</script>
+</body>
+</html>

@@ -3,7 +3,12 @@ import matplotlib.pyplot as plt
 
 # ── Parameters (edit these) ──────────────────────────────────────────────────
 f       = 0.5   # open fraction of binary grating
-M_upper = 2    # include Fourier orders  m = -M_upper … +M_upper
+M_upper = 2     # include Fourier orders  m = -M_upper … +M_upper
+x_half       = 10.0  # half-width of x-axis in units of d  (plot shows ±x_half·d)
+L            = 4.0   # target propagation distance  [units of L_T]
+                     # z-axis runs 0 → L·1.25  (shows a bit past L)
+z_crop_half  = None  # if set to a number: show only  L ± z_crop_half  [L_T]
+                     #   e.g. z_crop_half = 2.0  shows  L-2 … L+2  L_T
 
 # Physical units — only the ratio d²/λ matters; axes are normalised below
 d          = 1.0
@@ -21,8 +26,12 @@ a_m    = f * np.sinc(f * m_vals)   # real, shape (2M+1,)
 # ── Grid ─────────────────────────────────────────────────────────────────────
 num_x = 800
 num_z = 600
-x_vals = np.linspace(-10 * d,  10 * d,  num_x)
-z_vals = np.linspace(  0,       4 * L_T, num_z)
+x_vals = np.linspace(-x_half * d, x_half * d, num_x)
+if z_crop_half is None:
+    z_min_LT, z_max_LT = 0.0, L * 1.25
+else:
+    z_min_LT, z_max_LT = max(0.0, L - z_crop_half), L + z_crop_half
+z_vals = np.linspace(z_min_LT * L_T, z_max_LT * L_T, num_z)
 
 # ── Vectorised evaluation ─────────────────────────────────────────────────────
 # Γ(x, z) = Σ_{m,n} a_m a_n exp(i·2π(m-n)x/d) exp(i·π·λ·z·(m²-n²)/d²)
@@ -51,11 +60,8 @@ im = ax.pcolormesh(
 ax.set_xlabel(r'$x\,/\,d$', fontsize=13)
 ax.set_ylabel(r'$z\,/\,L_T$', fontsize=13)
 ax.set_title(
-    r'$\Gamma(x,z)=\sum_{m,n}a_m a_n\,'
-    r'e^{i2\pi(m-n)x/d}\,e^{i\pi\lambda z(m^2-n^2)/d^2}$'
-    '\n'
-    rf'Binary grating,  $f={f}$,  $M_\mathrm{{upper}}={M_upper}$',
-    fontsize=11,
+    rf'Binary grating Talbot carpet,  $f={f}$,  $M={M_upper}$',
+    fontsize=12,
 )
 fig.colorbar(im, ax=ax, label=r'$\Gamma(x,z)$')
 plt.tight_layout()

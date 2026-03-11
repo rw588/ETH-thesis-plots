@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gaussian-Schell Model Talbot Carpet</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #08080e; color: #ddddee; font-family: 'Consolas', monospace; font-size: 13px; padding: 10px; }
+  h2 { text-align: center; margin-bottom: 8px; font-size: 15px; letter-spacing: 1px; color: #aaccff; }
+  .canvas-row { display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; }
+  .canvas-wrap { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .canvas-wrap label { font-size: 11px; color: #99aacc; margin-bottom: 3px; }
+  canvas { display: block; cursor: crosshair; border: 1px solid #333355; }
+  .carpet-canvas { position: relative; }
+  .bottom-row { display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; }
+  #sliceCanvas { border: 1px solid #333355; }
+  #infoPanel { border: 1px solid #333355; padding: 10px; background: #0e0e1a; min-width: 200px; font-size: 12px; line-height: 1.8; }
+  hr { border: none; border-top: 1px solid #334; margin: 8px 0; }
+  .controls { display: flex; gap: 20px; justify-content: center; }
+  .ctrl-col { display: flex; flex-direction: column; gap: 6px; min-width: 280px; }
+  .ctrl-col h3 { font-size: 12px; color: #aaccff; margin-bottom: 2px; }
+  .slider-row { display: flex; align-items: center; gap: 6px; }
+  .slider-row label { width: 160px; font-size: 12px; color: #ccccdd; text-align: right; }
+  .slider-row input[type=range] { flex: 1; accent-color: #5588ff; }
+  .slider-row span { width: 55px; text-align: right; font-size: 12px; color: #ffcc88; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
+  button {
+    background: #1a1a2e; border: 1px solid #446; color: #ccddff;
+    padding: 4px 10px; cursor: pointer; font-size: 12px; border-radius: 3px;
+  }
+  button:hover { background: #2a2a4e; border-color: #668; }
+  #statusLine { text-align: center; margin-top: 8px; font-size: 12px; color: #88aacc; }
+  #resetBtn { background: #2a1a1a; border-color: #644; color: #ffbbbb; }
+  #resetBtn:hover { background: #3a2a2a; }
+</style>
+</head>
+<body>
+<h2>Gaussian-Schell Model — Talbot Carpet Explorer</h2>
+
+<div class="canvas-row">
+  <div class="canvas-wrap">
+    <label>Coherent (viridis)</label>
+    <canvas id="cohCanvas" width="280" height="260" class="carpet-canvas"></canvas>
+  </div>
+  <div class="canvas-wrap">
+    <label>GSM (inferno)</label>
+    <canvas id="gsmCanvas" width="280" height="260" class="carpet-canvas"></canvas>
+  </div>
+  <div class="canvas-wrap">
+    <label>Coherent − GSM (RdBu)</label>
+    <canvas id="diffCanvas" width="280" height="260" class="carpet-canvas"></canvas>
+  </div>
+</div>
+
+<div class="bottom-row">
+  <canvas id="sliceCanvas" width="440" height="200"></canvas>
+  <div id="infoPanel"></div>
+</div>
+
+<hr>
+
+<div class="controls">
+  <div class="ctrl-col">
+    <h3>Grating &amp; Source</h3>
+    <div class="slider-row"><label>f (duty cycle)</label><input type="range" id="sl_f" min="0.05" max="0.95" step="0.01" value="0.5"><span id="v_f">0.50</span></div>
+    <div class="slider-row"><label>M (harmonics)</label><input type="range" id="sl_M" min="1" max="25" step="1" value="8"><span id="v_M">8</span></div>
+    <div class="slider-row"><label>σ_I(0)/d</label><input type="range" id="sl_sI0" min="0.3" max="30" step="0.1" value="0.5"><span id="v_sI0">0.50</span></div>
+    <div class="slider-row"><label>σ_c(0)/d</label><input type="range" id="sl_sc0" min="0.1" max="30" step="0.1" value="0.5"><span id="v_sc0">0.50</span></div>
+    <div class="slider-row"><label>z_T/R(0) curvature</label><input type="range" id="sl_invR0" min="-0.5" max="0.5" step="0.005" value="0"><span id="v_invR0">0.000</span></div>
+  </div>
+  <div class="ctrl-col">
+    <h3>View</h3>
+    <div class="btn-row" id="lBtns">
+      <button data-l="0.5">L=½z_T</button>
+      <button data-l="1">L=1z_T</button>
+      <button data-l="30">L=30z_T</button>
+      <button data-l="770">L=770z_T</button>
+    </div>
+    <div class="btn-row" id="xiBtns">
+      <button data-xi="10">±10d</button>
+      <button data-xi="20">±20d</button>
+      <button data-xi="100">±100d</button>
+    </div>
+    <div class="slider-row"><label>z_min/z_T</label><input type="range" id="sl_zmin" min="0" max="800" step="0.5" value="0"><span id="v_zmin">0.0</span></div>
+    <div class="slider-row"><label>z_max/z_T</label><input type="range" id="sl_zmax" min="0.1" max="800" step="0.5" value="1.5"><span id="v_zmax">1.5</span></div>
+    <div class="slider-row"><label>slice z/z_T</label><input type="range" id="sl_zsl" min="0" max="800" step="0.05" value="1.0"><span id="v_zsl">1.00</span></div>
+    <div class="slider-row"><label>x-centre/d</label><input type="range" id="sl_xcen" min="-2000" max="2000" step="10" value="0"><span id="v_xcen">0</span></div>
+    <div class="btn-row"><button id="resetBtn">Reset</button></div>
+  </div>
+</div>
+
+<div id="statusLine">Ready.</div>
+
+<script>
+// ── Colormaps ──────────────────────────────────────────────────────────────────
+function makeColormap(stops) {
+  // stops: [[t, r, g, b], ...]
+  return function(v) {
+    if (v <= 0) return stops[0].slice(1);
+    if (v >= 1) return stops[stops.length-1].slice(1);
+    let i = 0;
+    while (i < stops.length-2 && v > stops[i+1][0]) i++;
+    const t0 = stops[i][0], t1 = stops[i+1][0];
+    const alpha = (v - t0) / (t1 - t0);
+    return [
+      Math.round(stops[i][1] + alpha*(stops[i+1][1]-stops[i][1])),
+      Math.round(stops[i][2] + alpha*(stops[i+1][2]-stops[i][2])),
+      Math.round(stops[i][3] + alpha*(stops[i+1][3]-stops[i][3]))
+    ];
+  };
+}
+const viridis = makeColormap([
+  [0,68,1,84],[0.25,59,82,139],[0.5,33,145,140],[0.75,94,201,98],[1,253,231,37]
+]);
+const inferno = makeColormap([
+  [0,0,0,4],[0.25,87,15,110],[0.5,188,55,84],[0.75,239,138,34],[1,252,255,164]
+]);
+const rdbu = makeColormap([
+  [0,5,48,97],[0.25,67,147,195],[0.5,247,247,247],[0.75,214,96,77],[1,103,0,31]
+]);
+
+// ── Worker blob ───────────────────────────────────────────────────────────────
+const WORKER_SRC = `
+const TWO_PI = 2*Math.PI;
+
+function sinc(x) {
+  if (Math.abs(x) < 1e-12) return 1.0;
+  return Math.sin(Math.PI*x) / (Math.PI*x);
+}
+
+function gratingCoeffs(M, f) {
+  const am = new Array(2*M+1);
+  for (let k = 0; k <= 2*M; k++) {
+    const m = k - M;
+    am[k] = f * sinc(m * f);
+  }
+  return am; // index 0 = m=-M
+}
+
+function gsmPropagate(sI0, sc0, LNorm, invR0) {
+  const sc0sq = Math.max(sc0*sc0, 1e-40);
+  const pd = 1.0/(4.0*sI0*sI0) + 1.0/sc0sq;
+  let sILsq = sI0*sI0*(1 - (LNorm*invR0)*(LNorm*invR0)) + LNorm*LNorm*pd/(Math.PI*Math.PI);
+  sILsq = Math.max(sILsq, 1e-12);
+  let sCLsq = Math.max(sc0sq * sILsq / (sI0*sI0), 1e-12);
+  let rho;
+  if (LNorm > 1e-12) {
+    rho = Math.PI*Math.PI * sILsq / (LNorm * pd);
+  } else {
+    rho = Infinity;
+  }
+  return { sIL: Math.sqrt(sILsq), sCL: Math.sqrt(sCLsq), rho };
+}
+
+function computeCarpet(M, f, sI0, sc0, LNorm, invR0, NZ, NX, xiHalf, xCenter, zmin, zmax) {
+  const am = gratingCoeffs(M, f);
+  const { sIL, sCL, rho } = gsmPropagate(sI0, sc0, LNorm, invR0);
+  const rhoEff = (!isFinite(rho) || Math.abs(rho) < 1e-8) ? 1e18 : rho;
+
+  const dx = 2*xiHalf / (NX-1);
+  const dz = (zmax - zmin) / (NZ-1);
+  const x0 = xCenter - xiHalf;
+
+  // Build index list: m from -M to M, n from -M to M, skip duplicates by pairs
+  // We'll do full double sum for GSM, and single sum for coherent
+
+  // Coherent carpet: NZ x NX complex sum
+  const cohArr = new Float32Array(NZ * NX);
+  const gsmArr = new Float32Array(NZ * NX);
+
+  for (let iz = 0; iz < NZ; iz++) {
+    const zeta = zmin + iz * dz; // z/z_T normalised
+    const uz = 1.0 + zeta / rhoEff;
+
+    // --- Coherent: E = sum_m a_m * exp(i*2pi*m^2*uz*zeta) * exp(i*2pi*m*uz*x)
+    // For each x, accumulate complex E
+    // Use "complex stepping" trick: for each m, step phasor by exp(i*2pi*m*uz*dx) each x step
+    const cohRe = new Float64Array(NX);
+    const cohIm = new Float64Array(NX);
+
+    for (let k = 0; k <= 2*M; k++) {
+      const m = k - M;
+      const a = am[k];
+      // phase at x0
+      const phiZ = TWO_PI * m * m * uz * zeta;
+      const phiX0 = TWO_PI * m * uz * x0;
+      let pRe = Math.cos(phiZ + phiX0) * a;
+      let pIm = Math.sin(phiZ + phiX0) * a;
+      const stepAngle = TWO_PI * m * uz * dx;
+      const stepRe = Math.cos(stepAngle);
+      const stepIm = Math.sin(stepAngle);
+      for (let ix = 0; ix < NX; ix++) {
+        cohRe[ix] += pRe;
+        cohIm[ix] += pIm;
+        // multiply by step
+        const nr = pRe*stepRe - pIm*stepIm;
+        const ni = pRe*stepIm + pIm*stepRe;
+        pRe = nr; pIm = ni;
+      }
+    }
+    for (let ix = 0; ix < NX; ix++) {
+      cohArr[iz*NX + ix] = cohRe[ix]*cohRe[ix] + cohIm[ix]*cohIm[ix];
+    }
+
+    // --- GSM: double sum over (m, n)
+    // I[x] = env[x] * Re[ sum_{m,n} B(m,n) * exp(phi(m,n)*x) ]
+    // env[x] = exp(-x^2 / (2*sIL^2))
+    // B = a_m*a_n * exp(i*2pi*(m^2-n^2)*zeta*(1+zeta/rhoEff)) * exp(-(m^2+n^2)*zeta^2/sIL^2) * exp(-2*(m+n)^2*zeta^2/sCL^2)
+    // phi = i*2pi*((m-n) + (m+n)*zeta/rhoEff) - (m-n)*zeta/sIL^2
+
+    const gsmRe = new Float64Array(NX);
+    const sIL2 = sIL*sIL;
+    const sCL2 = sCL*sCL;
+
+    for (let km = 0; km <= 2*M; km++) {
+      const m = km - M;
+      for (let kn = 0; kn <= 2*M; kn++) {
+        const n = kn - M;
+        const amn = am[km] * am[kn];
+        if (Math.abs(amn) < 1e-15) continue;
+
+        const Bamp = amn
+          * Math.exp(-(m*m + n*n)*zeta*zeta / sIL2)
+          * Math.exp(-2*(m+n)*(m+n)*zeta*zeta / sCL2);
+        if (Math.abs(Bamp) < 1e-30) continue;
+
+        const BphaseAngle = TWO_PI * (m*m - n*n) * zeta * (1 + zeta/rhoEff);
+        const BRe = Bamp * Math.cos(BphaseAngle);
+        const BIm = Bamp * Math.sin(BphaseAngle);
+
+        // phi = (i*2pi*((m-n) + (m+n)*zeta/rhoEff) - (m-n)*zeta/sIL^2)
+        const phiRe = -(m-n)*zeta / sIL2;
+        const phiIm = TWO_PI * ((m-n) + (m+n)*zeta/rhoEff);
+
+        // At x0: exp(phi*x0)
+        const ang0 = phiIm * x0;
+        const expX0Re = Math.exp(phiRe * x0) * Math.cos(ang0);
+        const expX0Im = Math.exp(phiRe * x0) * Math.sin(ang0);
+
+        // step: exp(phi*dx)
+        const stepMag = Math.exp(phiRe * dx);
+        const stepAng = phiIm * dx;
+        const stepRe2 = stepMag * Math.cos(stepAng);
+        const stepIm2 = stepMag * Math.sin(stepAng);
+
+        let pRe = expX0Re, pIm = expX0Im;
+        for (let ix = 0; ix < NX; ix++) {
+          // contribution = Re[(BRe + i*BIm) * (pRe + i*pIm)]
+          gsmRe[ix] += BRe*pRe - BIm*pIm;
+          const nr = pRe*stepRe2 - pIm*stepIm2;
+          const ni = pRe*stepIm2 + pIm*stepRe2;
+          pRe = nr; pIm = ni;
+        }
+      }
+    }
+
+    // Apply envelope
+    for (let ix = 0; ix < NX; ix++) {
+      const x = x0 + ix*dx;
+      const env = Math.exp(-x*x/(2*sIL2));
+      gsmArr[iz*NX + ix] = Math.max(0, env * gsmRe[ix]);
+    }
+  }
+
+  return { cohArr, gsmArr, sIL, sCL, rho };
+}
+
+self.onmessage = function(e) {
+  const { M, f, sI0, sc0, LNorm, invR0, NZ, NX, xiHalf, xCenter, zmin, zmax } = e.data;
+  const t0 = Date.now();
+  const result = computeCarpet(M, f, sI0, sc0, LNorm, invR0, NZ, NX, xiHalf, xCenter, zmin, zmax);
+  const dt = Date.now() - t0;
+  self.postMessage({ ...result, dt,
+    cohArr: result.cohArr.buffer, gsmArr: result.gsmArr.buffer
+  }, [result.cohArr.buffer, result.gsmArr.buffer]);
+};
+`;
+
+const workerBlob = new Blob([WORKER_SRC], {type: 'application/javascript'});
+const workerURL = URL.createObjectURL(workerBlob);
+let worker = new Worker(workerURL);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const NX = 256, NZ = 300;
+const DEFAULTS = {
+  f: 0.5, M: 8, sI0: 0.5, sc0: 0.5, invR0: 0,
+  zmin: 0, zmax: 1.5, zsl: 1.0, xcen: 0, xiHalf: 10, LNorm: 1.0
+};
+let state = {...DEFAULTS};
+let lastResult = null;
+let computing = false;
+let pendingCompute = false;
+let lastPhysicsState = null; // for cache invalidation
+
+function getPhysicsKey(s) {
+  return `${s.f}|${s.M}|${s.sI0}|${s.sc0}|${s.invR0}|${s.LNorm}|${s.zmin}|${s.zmax}|${s.xiHalf}|${s.xcen}`;
+}
+
+// ── Slider wiring ─────────────────────────────────────────────────────────────
+const sliders = {
+  f: ['sl_f','v_f', v=>v.toFixed(2)],
+  M: ['sl_M','v_M', v=>v.toFixed(0)],
+  sI0: ['sl_sI0','v_sI0', v=>v.toFixed(2)],
+  sc0: ['sl_sc0','v_sc0', v=>v.toFixed(2)],
+  invR0: ['sl_invR0','v_invR0', v=>v.toFixed(3)],
+  zmin: ['sl_zmin','v_zmin', v=>v.toFixed(1)],
+  zmax: ['sl_zmax','v_zmax', v=>v.toFixed(1)],
+  zsl: ['sl_zsl','v_zsl', v=>v.toFixed(2)],
+  xcen: ['sl_xcen','v_xcen', v=>v.toFixed(0)],
+};
+
+for (const [key, [sid, vid, fmt]] of Object.entries(sliders)) {
+  const sl = document.getElementById(sid);
+  const vl = document.getElementById(vid);
+  sl.addEventListener('input', () => {
+    state[key] = parseFloat(sl.value);
+    vl.textContent = fmt(state[key]);
+    if (key === 'zsl') {
+      if (lastResult) renderAll(false);
+    } else {
+      scheduleCompute();
+    }
+  });
+}
+
+// L buttons
+document.getElementById('lBtns').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const L = parseFloat(btn.dataset.l);
+    state.LNorm = L;
+    document.querySelectorAll('#lBtns button').forEach(b => b.classList.toggle('active', b === btn));
+    const zmax = Math.round(L * 1.5 * 2) / 2; // round to 0.5
+    setSlider('zmin', 0);
+    setSlider('zmax', Math.max(0.1, zmax));
+    setSlider('zsl', L);
+    scheduleCompute();
+  });
+});
+
+// xi buttons
+document.getElementById('xiBtns').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.xiHalf = parseFloat(btn.dataset.xi);
+    document.querySelectorAll('#xiBtns button').forEach(b => b.classList.toggle('active', b === btn));
+    scheduleCompute();
+  });
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  for (const [key, [sid, vid, fmt]] of Object.entries(sliders)) {
+    if (DEFAULTS[key] !== undefined) {
+      state[key] = DEFAULTS[key];
+      document.getElementById(sid).value = DEFAULTS[key];
+      document.getElementById(vid).textContent = fmt(DEFAULTS[key]);
+    }
+  }
+  state.xiHalf = DEFAULTS.xiHalf;
+  state.LNorm = DEFAULTS.LNorm;
+  document.querySelectorAll('#lBtns button').forEach(b =>
+    b.classList.toggle('active', parseFloat(b.dataset.l) === DEFAULTS.LNorm));
+  document.querySelectorAll('#xiBtns button').forEach(b =>
+    b.classList.toggle('active', parseFloat(b.dataset.xi) === DEFAULTS.xiHalf));
+  scheduleCompute();
+});
+
+// Highlight default buttons on load
+document.querySelectorAll('#lBtns button').forEach(b =>
+  b.classList.toggle('active', parseFloat(b.dataset.l) === DEFAULTS.LNorm));
+document.querySelectorAll('#xiBtns button').forEach(b =>
+  b.classList.toggle('active', parseFloat(b.dataset.xi) === DEFAULTS.xiHalf));
+
+function setSlider(key, val) {
+  const [sid, vid, fmt] = sliders[key];
+  state[key] = val;
+  document.getElementById(sid).value = val;
+  document.getElementById(vid).textContent = fmt(val);
+}
+
+// Carpet canvas click → move slice
+['cohCanvas','gsmCanvas','diffCanvas'].forEach(id => {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const canvas = e.target;
+    const rect = canvas.getBoundingClientRect();
+    const fracY = 1 - (e.clientY - rect.top) / rect.height; // 0=bottom, 1=top
+    const zval = state.zmin + fracY * (state.zmax - state.zmin);
+    const clamped = Math.max(0, Math.min(800, parseFloat(zval.toFixed(2))));
+    setSlider('zsl', clamped);
+    if (lastResult) renderAll(false);
+  });
+});
+
+// ── Compute ───────────────────────────────────────────────────────────────────
+function scheduleCompute() {
+  if (computing) { pendingCompute = true; return; }
+  doCompute();
+}
+
+function doCompute() {
+  computing = true;
+  pendingCompute = false;
+  const key = getPhysicsKey(state);
+  if (key === lastPhysicsState && lastResult) {
+    computing = false;
+    renderAll(false);
+    return;
+  }
+  document.getElementById('statusLine').textContent = 'Computing…';
+  worker.postMessage({
+    M: state.M, f: state.f, sI0: state.sI0, sc0: state.sc0,
+    LNorm: state.LNorm, invR0: state.invR0,
+    NZ, NX,
+    xiHalf: state.xiHalf, xCenter: state.xcen,
+    zmin: state.zmin, zmax: state.zmax
+  });
+}
+
+worker.onmessage = function(e) {
+  const { cohArr: cohBuf, gsmArr: gsmBuf, sIL, sCL, rho, dt } = e.data;
+  lastResult = {
+    coh: new Float32Array(cohBuf),
+    gsm: new Float32Array(gsmBuf),
+    sIL, sCL, rho,
+    zmin: state.zmin, zmax: state.zmax,
+    xiHalf: state.xiHalf, xcen: state.xcen
+  };
+  lastPhysicsState = getPhysicsKey(state);
+  computing = false;
+  document.getElementById('statusLine').textContent = `Done (${dt} ms)`;
+  renderAll(true);
+  if (pendingCompute) doCompute();
+};
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+function applyColormap(val, cmap) { return cmap(val); }
+
+function renderCarpet(canvasId, data, cmap, useSqrt) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+
+  // find min/max
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] < mn) mn = data[i];
+    if (data[i] > mx) mx = data[i];
+  }
+  const range = mx - mn || 1;
+
+  // data is NZ rows (bottom=zmin) x NX cols
+  // canvas: row 0 = top = zmax
+  for (let row = 0; row < H; row++) {
+    const iz = Math.floor((H - 1 - row) / (H - 1) * (NZ - 1));
+    for (let col = 0; col < W; col++) {
+      const ix = Math.floor(col / (W - 1) * (NX - 1));
+      let v = (data[iz * NX + ix] - mn) / range;
+      if (useSqrt) v = Math.sqrt(Math.max(0, v));
+      const [r,g,b] = cmap(v);
+      const idx = (row * W + col) * 4;
+      d[idx] = r; d[idx+1] = g; d[idx+2] = b; d[idx+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Draw h-line for slice
+  const zsl = state.zsl;
+  const zmin = lastResult.zmin, zmax = lastResult.zmax;
+  const fracZ = (zsl - zmin) / (zmax - zmin);
+  const lineY = Math.round((1 - fracZ) * (H - 1));
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, lineY);
+  ctx.lineTo(W, lineY);
+  ctx.stroke();
+
+  // Axis labels
+  const xiH = lastResult.xiHalf, xcen = lastResult.xcen;
+  ctx.fillStyle = '#ffffffaa';
+  ctx.font = '10px Consolas';
+  ctx.textAlign = 'left';
+  ctx.fillText(`x=${(-xiH+xcen).toFixed(0)}d`, 3, H-3);
+  ctx.textAlign = 'right';
+  ctx.fillText(`x=${(xiH+xcen).toFixed(0)}d`, W-3, H-3);
+  ctx.save();
+  ctx.translate(W-3, H-5);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'right';
+  ctx.fillText(`z=${zmin.toFixed(1)}`, 0, 0);
+  ctx.textAlign = 'left';
+  ctx.fillText(`z=${zmax.toFixed(1)}`, -(H-10), 0);
+  ctx.restore();
+}
+
+function renderDiff(coh, gsm) {
+  const canvas = document.getElementById('diffCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+
+  // diff array
+  const diff = new Float32Array(NZ * NX);
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < NZ * NX; i++) {
+    diff[i] = coh[i] - gsm[i];
+    if (diff[i] < mn) mn = diff[i];
+    if (diff[i] > mx) mx = diff[i];
+  }
+  const absMax = Math.max(Math.abs(mn), Math.abs(mx)) || 1;
+
+  for (let row = 0; row < H; row++) {
+    const iz = Math.floor((H-1-row) / (H-1) * (NZ-1));
+    for (let col = 0; col < W; col++) {
+      const ix = Math.floor(col/(W-1)*(NX-1));
+      const v = (diff[iz*NX+ix] / absMax) * 0.5 + 0.5; // map [-1,1] -> [0,1]
+      const [r,g,b] = rdbu(Math.max(0, Math.min(1, v)));
+      const idx = (row*W+col)*4;
+      d[idx]=r; d[idx+1]=g; d[idx+2]=b; d[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // h-line
+  const zsl = state.zsl;
+  const zmin = lastResult.zmin, zmax = lastResult.zmax;
+  const fracZ = (zsl - zmin) / (zmax - zmin);
+  const lineY = Math.round((1 - fracZ) * (H - 1));
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, lineY); ctx.lineTo(W, lineY); ctx.stroke();
+
+  const xiH = lastResult.xiHalf, xcen = lastResult.xcen;
+  ctx.fillStyle = '#ffffffaa';
+  ctx.font = '10px Consolas';
+  ctx.textAlign = 'left';
+  ctx.fillText(`x=${(-xiH+xcen).toFixed(0)}d`, 3, H-3);
+  ctx.textAlign = 'right';
+  ctx.fillText(`x=${(xiH+xcen).toFixed(0)}d`, W-3, H-3);
+  ctx.save();
+  ctx.translate(W-3, H-5);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'right';
+  ctx.fillText(`z=${lastResult.zmin.toFixed(1)}`, 0, 0);
+  ctx.textAlign = 'left';
+  ctx.fillText(`z=${lastResult.zmax.toFixed(1)}`, -(H-10), 0);
+  ctx.restore();
+}
+
+function getSliceArrays() {
+  if (!lastResult) return null;
+  const { coh, gsm, zmin, zmax } = lastResult;
+  const fracZ = (state.zsl - zmin) / (zmax - zmin);
+  const iz = Math.round(Math.max(0, Math.min(1, fracZ)) * (NZ-1));
+  const cohSlice = coh.slice(iz*NX, (iz+1)*NX);
+  const gsmSlice = gsm.slice(iz*NX, (iz+1)*NX);
+  return { cohSlice, gsmSlice };
+}
+
+function renderSlice() {
+  const canvas = document.getElementById('sliceCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, W, H);
+  if (!lastResult) return;
+
+  const slices = getSliceArrays();
+  if (!slices) return;
+  const { cohSlice, gsmSlice } = slices;
+
+  // find max
+  let mx = 0;
+  for (let i = 0; i < NX; i++) {
+    if (cohSlice[i] > mx) mx = cohSlice[i];
+    if (gsmSlice[i] > mx) mx = gsmSlice[i];
+  }
+  if (mx === 0) mx = 1;
+
+  const pad = {l:40, r:15, t:25, b:35};
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+
+  function toCanvasX(i) { return pad.l + (i/(NX-1))*pw; }
+  function toCanvasY(v) { return pad.t + ph * (1 - v/mx); }
+
+  // Draw filled areas
+  function drawFill(data, color, alpha) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(toCanvasX(0), toCanvasY(0));
+    for (let i = 0; i < NX; i++) {
+      ctx.lineTo(toCanvasX(i), toCanvasY(data[i]));
+    }
+    ctx.lineTo(toCanvasX(NX-1), toCanvasY(0));
+    ctx.closePath();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawLine(data, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < NX; i++) {
+      const x = toCanvasX(i), y = toCanvasY(data[i]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  drawFill(cohSlice, '#50c0b0', 0.13);
+  drawFill(gsmSlice, '#e08030', 0.13);
+  drawLine(cohSlice, '#50c0b0');
+  drawLine(gsmSlice, '#e08030');
+
+  // Axes
+  ctx.strokeStyle = '#445566';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+ph);
+  ctx.lineTo(pad.l+pw, pad.t+ph);
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#aabbcc';
+  ctx.font = '11px Consolas';
+  ctx.textAlign = 'center';
+  const xiH = lastResult.xiHalf, xcen = lastResult.xcen;
+  ctx.fillText(`${(-xiH+xcen).toFixed(0)}d`, pad.l, H-5);
+  ctx.fillText(`${xcen.toFixed(0)}d`, pad.l+pw/2, H-5);
+  ctx.fillText(`${(xiH+xcen).toFixed(0)}d`, pad.l+pw, H-5);
+  ctx.fillText('x', pad.l+pw/2, H-18);
+
+  ctx.textAlign = 'right';
+  ctx.fillText('I', pad.l-3, pad.t+8);
+  ctx.fillText('0', pad.l-3, pad.t+ph);
+  ctx.fillText(mx.toFixed(2), pad.l-3, pad.t+4);
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ccddee';
+  ctx.font = '11px Consolas';
+  ctx.fillText(`Intensity slice at z/z_T = ${state.zsl.toFixed(2)}`, pad.l+pw/2, pad.t-7);
+
+  // Legend
+  ctx.font = '11px Consolas';
+  ctx.fillStyle = '#50c0b0'; ctx.fillRect(pad.l+5, pad.t+5, 14, 3);
+  ctx.fillStyle = '#aabbcc'; ctx.textAlign = 'left'; ctx.fillText('Coherent', pad.l+22, pad.t+9);
+  ctx.fillStyle = '#e08030'; ctx.fillRect(pad.l+90, pad.t+5, 14, 3);
+  ctx.fillStyle = '#aabbcc'; ctx.fillText('GSM', pad.l+107, pad.t+9);
+}
+
+function renderInfo() {
+  if (!lastResult) return;
+  const { sIL, sCL, rho } = lastResult;
+  const rhoStr = isFinite(rho) ? rho.toFixed(3) : '∞';
+  document.getElementById('infoPanel').innerHTML = `
+    <b>Parameters</b><br>
+    f = ${state.f.toFixed(2)}<br>
+    M = ${state.M}<br>
+    σ_I(0)/d = ${state.sI0.toFixed(2)}<br>
+    σ_c(0)/d = ${state.sc0.toFixed(2)}<br>
+    z_T/R(0) = ${state.invR0.toFixed(3)}<br>
+    <br>
+    <b>At z = z_max</b><br>
+    σ_I(L)/d = ${sIL.toFixed(4)}<br>
+    σ_c(L)/d = ${sCL.toFixed(4)}<br>
+    ρ/z_T = ${rhoStr}<br>
+    <br>
+    <b>View</b><br>
+    z window: [${state.zmin.toFixed(1)}, ${state.zmax.toFixed(1)}] z_T<br>
+    x range: ±${state.xiHalf}d + ${state.xcen}d<br>
+    slice: z = ${state.zsl.toFixed(2)} z_T
+  `;
+}
+
+function renderAll(fromCompute) {
+  if (!lastResult) return;
+  if (fromCompute) {
+    renderCarpet('cohCanvas', lastResult.coh, viridis, true);
+    renderCarpet('gsmCanvas', lastResult.gsm, inferno, true);
+    renderDiff(lastResult.coh, lastResult.gsm);
+  } else {
+    // re-draw carpets with updated h-line (fast: repaint colormapped then draw line)
+    renderCarpet('cohCanvas', lastResult.coh, viridis, true);
+    renderCarpet('gsmCanvas', lastResult.gsm, inferno, true);
+    renderDiff(lastResult.coh, lastResult.gsm);
+  }
+  renderSlice();
+  renderInfo();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+scheduleCompute();
+</script>
+</body>
+</html>
