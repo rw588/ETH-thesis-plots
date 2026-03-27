@@ -87,6 +87,9 @@ I(x,L+z) = I_L \sum_{p,q} a_{\frac{q+p}{2}} a_{\frac{q-p}{2}}
     <div class="slider-row"><label>&sigma;<sub>I</sub>(0)/d</label><input type="range" id="sl_sI0" min="0.3" max="30" step="0.1" value="0.5"><span id="v_sI0">0.50</span></div>
     <div class="slider-row"><label>&sigma;<sub>c</sub>(0)/d</label><input type="range" id="sl_sc0" min="0.1" max="30" step="0.1" value="0.5"><span id="v_sc0">0.50</span></div>
     <div class="slider-row"><label>z<sub>T</sub>/R(0) &nbsp;(input curvature)</label><input type="range" id="sl_invR0" min="-0.5" max="0.5" step="0.005" value="0"><span id="v_invR0">0.000</span></div>
+    <div class="slider-row"><label>&lambda; &nbsp;(wavelength / nm)</label><input type="range" id="sl_lambda" min="400" max="800" step="1" value="532"><span id="v_lambda">532</span></div>
+    <div class="slider-row"><label>d &nbsp;(grating period / nm)</label><input type="range" id="sl_d" min="1000" max="100000" step="100" value="10000"><span id="v_d">10000</span></div>
+    <div class="slider-row" style="margin-top:2px;"><label style="color:#88aacc;">&lambda;/d =</label><span id="v_lod" style="color:#88ffcc;width:auto;text-align:left;padding-left:4px;">0.0532</span>&nbsp;&nbsp;<label style="color:#88aacc;">z<sub>T</sub> =</label><span id="v_zT_nm" style="color:#88ffcc;width:auto;text-align:left;padding-left:4px;">1.88 mm</span></div>
   </div>
   <div class="ctrl-col">
     <h3>Interferometer length, L separates source and grating and measurement point</h3>
@@ -422,6 +425,31 @@ for(const [key,[sid,vid,fmt]] of Object.entries(sliders)){
   });
 }
 
+
+// ─── Physical scale (λ, d) ────────────────────────────────────────────────────
+let physLambda_nm = 532, physD_nm = 10000;
+function updatePhysicalScale(){
+  const lod = physLambda_nm / physD_nm;
+  const zT_nm = physD_nm * physD_nm / physLambda_nm;
+  document.getElementById('v_lod').textContent = lod.toFixed(5);
+  // Display z_T in convenient units
+  let zT_str;
+  if(zT_nm >= 1e6)      zT_str = (zT_nm/1e6).toFixed(3) + ' mm';
+  else if(zT_nm >= 1e3) zT_str = (zT_nm/1e3).toFixed(3) + ' \u03bcm';
+  else                  zT_str = zT_nm.toFixed(1) + ' nm';
+  document.getElementById('v_zT_nm').textContent = zT_str;
+}
+document.getElementById('sl_lambda').addEventListener('input', function(){
+  physLambda_nm = parseFloat(this.value);
+  document.getElementById('v_lambda').textContent = physLambda_nm;
+  updatePhysicalScale();
+});
+document.getElementById('sl_d').addEventListener('input', function(){
+  physD_nm = parseFloat(this.value);
+  document.getElementById('v_d').textContent = physD_nm;
+  updatePhysicalScale();
+});
+updatePhysicalScale();
 
 document.getElementById('lBtns').querySelectorAll('button').forEach(btn=>{
   btn.addEventListener('click',()=>{
