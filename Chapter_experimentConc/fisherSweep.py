@@ -19,7 +19,7 @@ plt.style.use("dark_background")
 rng = np.random.default_rng(42)
 
 # ── Parameters ────────────────────────────────────────────────────────────────
-lambda_0   = 1.0    # mean photon number scale
+lambda_0   = 1000    # mean photon number scale
 C          = 0.4    # fringe contrast  (0 < C < 1)
 phi_g      = 0.0119    # true gravitational phase [rad]
 T          = 1.0    # total measurement time
@@ -511,5 +511,187 @@ ax_bar.legend(frameon=False, fontsize=10)
 ax_bar.grid(True, axis="y", linestyle=":", linewidth=0.5)
 
 fig4.savefig("fisherSweep_signal_points.pdf")
+
+
+# ── Figure 5: weight-sensitivity of Var(φ_g) for C-optimal 3-point design ────
+#
+# Fix the 3 optimal positions; sweep over all weight triples (w1,w2,w3)
+# with w_i > 0 and sum = 1.  Map to a 2-D triangular simplex using
+# Cartesian coordinates of the equilateral triangle:
+#   vertex 1 = (0, 0),  vertex 2 = (1, 0),  vertex 3 = (1/2, √3/2)
+# so any point (w1,w2,w3) maps to  x = w2 + w3/2,  y = w3*√3/2.
+
+pos3 = results[3]["positions"]
+w3_opt = results[3]["weights"]
+
+GRID_W = 400   # simplex resolution
+
+# Uniform grid over the 2-simplex: sweep w1, w2 independently;
+# w3 = 1 - w1 - w2  (valid only where w3 > 0)
+t = np.linspace(0, 1, GRID_W)
+W1, W2 = np.meshgrid(t, t)
+W3 = 1.0 - W1 - W2
+
+var_w = np.full(W1.shape, np.nan)
+mask  = (W1 > 0) & (W2 > 0) & (W3 > 0)
+
+flat_w1 = W1[mask]; flat_w2 = W2[mask]; flat_w3 = W3[mask]
+weights_flat = np.stack([flat_w1, flat_w2, flat_w3], axis=1)  # (N, 3)
+
+# vectorised Fisher over all valid weight combos
+L_pts = signal(pos3)           # (3,)
+G_pts = design_matrix(pos3)    # (3, 3)
+# Fisher[a,b,m] = T * sum_j  w_j[m]/L_j * G[a,j] * G[b,j]
+wL = weights_flat / L_pts[None, :]         # (N, 3)
+Fmat = T * np.einsum("mj,aj,bj->mab", wL, G_pts, G_pts)  # (N,3,3)
+
+det_F = np.linalg.det(Fmat)
+valid = det_F > 1e-20
+Finv  = np.full_like(Fmat, np.nan)
+Finv[valid] = np.linalg.inv(Fmat[valid])
+var_vals = np.einsum("i,mij,j->m", grad_phi, Finv, grad_phi)
+var_vals[~valid] = np.nan
+
+var_w[mask] = var_vals
+
+# Cartesian simplex coordinates for plotting
+# x = w2 + w3/2,  y = w3 * √3/2
+X_sim = W2 + 0.5 * W3
+Y_sim = W3 * np.sqrt(3) / 2
+
+# optimal point in simplex coords
+# order of weights must match pos3 sort order used in the optimiser
+w3_s = w3_opt   # keep in original order matching pos3
+x_opt = w3_s[1] + 0.5 * w3_s[2]
+y_opt = w3_s[2] * np.sqrt(3) / 2
+
+fig5, axes5 = plt.subplots(1, 2, figsize=(13, 5.5))
+fig5.suptitle(
+    rf"Weight sensitivity of $\mathrm{{Var}}(\hat\phi_g)$  —  "
+    rf"C-optimal $n=3$ positions fixed"
+    "\n"
+    rf"$kx_1={pos3[0]/np.pi:.3f}\pi$,  "
+    rf"$kx_2={pos3[1]/np.pi:.3f}\pi$,  "
+    rf"$kx_3={pos3[2]/np.pi:.3f}\pi$",
+    fontsize=10)
+
+# ── left panel: Var(phi_g) over simplex ──────────────────────────────────────
+ax = axes5[0]
+sc = ax.scatter(X_sim[mask], Y_sim[mask],
+                c=var_w[mask], s=2, cmap="viridis",
+                vmin=np.nanpercentile(var_w, 2),
+                vmax=np.nanpercentile(var_w, 98))
+fig5.colorbar(sc, ax=ax, label=r"$\mathrm{Var}(\hat\phi_g)$  [rad²]")
+ax.scatter(x_opt, y_opt, color="red", s=120, zorder=5, marker="*",
+           label=rf"C-optimal  ($\mathrm{{Var}}={results[3]['var_phi']:.5f}$)")
+
+# draw simplex triangle boundary
+tri_x = [0, 1, 0.5, 0]
+tri_y = [0, 0, np.sqrt(3)/2, 0]
+ax.plot(tri_x, tri_y, "w-", linewidth=0.8, alpha=0.6)
+
+# label vertices with weight-point correspondence
+offset = 0.05
+ax.text(0 - offset,      0 - offset,      rf"$w_1=1$", ha="center", fontsize=9, color="white")
+ax.text(1 + offset,      0 - offset,      rf"$w_2=1$", ha="center", fontsize=9, color="white")
+ax.text(0.5,  np.sqrt(3)/2 + offset,      rf"$w_3=1$", ha="center", fontsize=9, color="white")
+
+ax.set_aspect("equal")
+ax.axis("off")
+ax.set_title(r"$\mathrm{Var}(\hat\phi_g)$ across weight simplex", fontsize=10)
+ax.legend(frameon=False, fontsize=9)
+
+# ── right panel: σ(phi_g) as contours ────────────────────────────────────────
+ax2 = axes5[1]
+sig_w = np.sqrt(var_w)
+
+sc2 = ax2.scatter(X_sim[mask], Y_sim[mask],
+                  c=sig_w[mask], s=2, cmap="plasma",
+                  vmin=np.nanpercentile(sig_w, 2),
+                  vmax=np.nanpercentile(sig_w, 98))
+fig5.colorbar(sc2, ax=ax2, label=r"$\sigma(\hat\phi_g)$  [rad]")
+
+# overlay contour lines by re-gridding onto a regular mesh via tricontourf
+from matplotlib.tri import Triangulation
+xi_flat = X_sim[mask].ravel()
+yi_flat = Y_sim[mask].ravel()
+si_flat = sig_w[mask].ravel()
+finite  = np.isfinite(si_flat)
+triang  = Triangulation(xi_flat[finite], yi_flat[finite])
+ax2.tricontour(triang, si_flat[finite], levels=12,
+               colors="white", linewidths=0.5, alpha=0.5)
+
+ax2.scatter(x_opt, y_opt, color="cyan", s=120, zorder=5, marker="*",
+            label=rf"C-optimal  ($\sigma={np.sqrt(results[3]['var_phi']):.5f}$ rad)")
+ax2.plot(tri_x, tri_y, "w-", linewidth=0.8, alpha=0.6)
+ax2.text(0 - offset,      0 - offset,      rf"$w_1=1$", ha="center", fontsize=9, color="white")
+ax2.text(1 + offset,      0 - offset,      rf"$w_2=1$", ha="center", fontsize=9, color="white")
+ax2.text(0.5,  np.sqrt(3)/2 + offset,      rf"$w_3=1$", ha="center", fontsize=9, color="white")
+
+# annotate the optimal weights
+ax2.annotate(
+    rf"$w^*=({w3_s[0]:.2f},\,{w3_s[1]:.2f},\,{w3_s[2]:.2f})$",
+    xy=(x_opt, y_opt), xytext=(x_opt + 0.12, y_opt - 0.12),
+    fontsize=8, color="cyan",
+    arrowprops=dict(arrowstyle="->", color="cyan", lw=0.8))
+
+ax2.set_aspect("equal")
+ax2.axis("off")
+ax2.set_title(r"$\sigma(\hat\phi_g)$ with contours  — weight sensitivity", fontsize=10)
+ax2.legend(frameon=False, fontsize=9)
+
+plt.tight_layout()
+fig5.savefig("fisherSweep_weight_sensitivity.pdf")
+
+
+# ── Figure 6: C-optimal 3-point design — phase vs weight ──────────────────────
+p_opt = results[3]["positions"]
+w_opt = results[3]["weights"]
+
+fig6, ax6 = plt.subplots(figsize=(7, 4))
+fig6.suptitle(
+    rf"C-optimal $n=3$ design  —  "
+    rf"$\lambda_0={lambda_0}$, $C={C}$, $\phi_g={phi_g}$ rad",
+    fontsize=11)
+
+order = np.argsort(p_opt)
+pos_s = p_opt[order]
+w_s   = w_opt[order]
+
+ax6.vlines(pos_s / np.pi, 0, w_s, colors="C2", linewidth=1.5, linestyles="solid")
+ax6.scatter(pos_s / np.pi, w_s, marker="x", s=120, color="C2",
+            linewidths=2.5, zorder=5)
+
+for xi, wi in zip(pos_s, w_s):
+    ax6.text(xi / np.pi, wi + 0.012,
+             rf"$({xi/np.pi:.3f}\pi,\ {wi:.3f})$",
+             ha="center", va="bottom", fontsize=9, color="C2")
+
+ax6.set_xlabel(r"$kx\,/\,\pi$", fontsize=11)
+ax6.set_ylabel(r"weight  $w_j$", fontsize=11, color="C2")
+ax6.tick_params(axis="y", labelcolor="C2")
+ax6.set_xlim(0, 2)
+ax6.set_ylim(0, max(w_s) * 1.35)
+ax6.set_xticks(np.linspace(0, 2, 9))
+ax6.axhline(1/3, color="C2", linewidth=0.7, linestyle="--", alpha=0.4,
+            label=r"equal weight $1/3$")
+ax6.grid(True, linestyle=":", linewidth=0.5)
+
+# overlay λ(kx) on a twin axis
+ax6b = ax6.twinx()
+kx_fine = np.linspace(0, 2 * np.pi, 800)
+ax6b.plot(kx_fine / np.pi, signal(kx_fine), color="white", linewidth=1.5,
+          alpha=0.7, label=r"$\lambda(kx)$")
+ax6b.set_ylabel(r"$\lambda(kx)$  [a.u.]", fontsize=11, color="white")
+ax6b.tick_params(axis="y", labelcolor="white")
+ax6b.set_ylim(0, signal(kx_fine).max() * 2.5)   # keep curve in lower half so stems don't clash
+
+# combined legend
+lines1, labs1 = ax6.get_legend_handles_labels()
+lines2, labs2 = ax6b.get_legend_handles_labels()
+ax6b.legend(lines1 + lines2, labs1 + labs2, frameon=False, fontsize=9, loc="upper right")
+
+plt.tight_layout()
+fig6.savefig("fisherSweep_position_sensitivity.pdf")
 
 plt.show()

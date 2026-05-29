@@ -1,0 +1,247 @@
+\documentclass[border=8pt]{standalone}
+\usepackage{tikz}
+\usepackage{tikz-3dplot}
+\usetikzlibrary{calc,3d,arrows.meta}
+\usepackage{xcolor}
+\usepackage{amsmath}
+
+%------ colour palette -----------------------------------------------
+\colorlet{GVecA}{blue!80!black}
+\colorlet{GVecB}{red!70!black}
+\colorlet{GVecC}{green!60!black}
+\colorlet{ConeRing}{blue!45!cyan}
+\colorlet{PlaneA}{orange!90!red}
+\colorlet{PlaneB}{cyan!80!blue}
+\colorlet{PlaneC}{violet!65!blue}
+\colorlet{EllipCol}{blue!55!violet}
+
+\begin{document}
+
+% ====================================================================
+% FIGURE 1 — one g-vector, cone/ring, single Gaussian constraint plane
+% g = (1, cos theta, sin theta), ring traces a circle at a0 = 1
+% ====================================================================
+\tdplotsetmaincoords{65}{125}
+\begin{tikzpicture}[tdplot_main_coords, scale=2.5,
+    line cap=round, line join=round, font=\small]
+
+  % g at theta=30 deg; |g|=sqrt(2)
+  \def\gTheta{30}
+  \pgfmathsetmacro{\GX}{1.0}
+  \pgfmathsetmacro{\GY}{cos(\gTheta)}
+  \pgfmathsetmacro{\GZ}{sin(\gTheta)}
+  % unit vector ghat
+  \pgfmathsetmacro{\GHX}{1.0/sqrt(2)}
+  \pgfmathsetmacro{\GHY}{cos(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\GHZ}{sin(\gTheta)/sqrt(2)}
+  % two orthonormal vectors spanning the plane:
+  %   e1 = (0, -sin, cos),  e2 = (1/sqrt2, -cos/sqrt2, -sin/sqrt2)
+  \pgfmathsetmacro{\EAX}{0.0}
+  \pgfmathsetmacro{\EAY}{-sin(\gTheta)}
+  \pgfmathsetmacro{\EAZ}{cos(\gTheta)}
+  \pgfmathsetmacro{\EBX}{1.0/sqrt(2)}
+  \pgfmathsetmacro{\EBY}{-cos(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\EBZ}{-sin(\gTheta)/sqrt(2)}
+  % plane centre at t=0.75 along g
+  \pgfmathsetmacro{\PCX}{0.75}
+  \pgfmathsetmacro{\PCY}{0.75*cos(\gTheta)}
+  \pgfmathsetmacro{\PCZ}{0.75*sin(\gTheta)}
+  \def\hs{0.55}   % half-size of visible plane patch
+
+  %-- Axes --
+  \draw[->,thick,black!55] (0,0,0) -- (1.75,0,0) node[right]{$a_0$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,1.75,0) node[right]{$a_1$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,0,1.55) node[above]{$a_2$};
+
+  %-- Cone lines origin -> ring --
+  \foreach \cang in {0,30,...,330}{
+    \draw[ConeRing!20,very thin] (0,0,0) -- ({1},{cos(\cang)},{sin(\cang)});
+  }
+
+  %-- Ring of possible g-vectors: (1, cos t, sin t) --
+  \draw[ConeRing, thick, dashed,
+        domain=0:360, smooth, samples=72, variable=\aa]
+    plot ({1},{cos(\aa)},{sin(\aa)});
+
+  %-- Gaussian constraint-plane layers back-to-front --
+  %   sigma~0.10; opacities ~ exp(-(d/0.1)^2/2)
+  %   For this view angle positive d is toward viewer
+  \foreach \dVal/\fillop in {
+      -0.24/0.04,
+      -0.16/0.15,
+      -0.08/0.38,
+       0.00/0.70,
+       0.08/0.38,
+       0.16/0.15,
+       0.24/0.04}{
+    \pgfmathsetmacro{\OX}{\dVal*\GHX}
+    \pgfmathsetmacro{\OY}{\dVal*\GHY}
+    \pgfmathsetmacro{\OZ}{\dVal*\GHZ}
+    \pgfmathsetmacro{\LAX}{\PCX + \hs*\EAX + \hs*\EBX + \OX}
+    \pgfmathsetmacro{\LAY}{\PCY + \hs*\EAY + \hs*\EBY + \OY}
+    \pgfmathsetmacro{\LAZ}{\PCZ + \hs*\EAZ + \hs*\EBZ + \OZ}
+    \pgfmathsetmacro{\LBX}{\PCX - \hs*\EAX + \hs*\EBX + \OX}
+    \pgfmathsetmacro{\LBY}{\PCY - \hs*\EAY + \hs*\EBY + \OY}
+    \pgfmathsetmacro{\LBZ}{\PCZ - \hs*\EAZ + \hs*\EBZ + \OZ}
+    \pgfmathsetmacro{\LCX}{\PCX - \hs*\EAX - \hs*\EBX + \OX}
+    \pgfmathsetmacro{\LCY}{\PCY - \hs*\EAY - \hs*\EBY + \OY}
+    \pgfmathsetmacro{\LCZ}{\PCZ - \hs*\EAZ - \hs*\EBZ + \OZ}
+    \pgfmathsetmacro{\LDX}{\PCX + \hs*\EAX - \hs*\EBX + \OX}
+    \pgfmathsetmacro{\LDY}{\PCY + \hs*\EAY - \hs*\EBY + \OY}
+    \pgfmathsetmacro{\LDZ}{\PCZ + \hs*\EAZ - \hs*\EBZ + \OZ}
+    \fill[PlaneA, fill opacity=\fillop]
+      (\LAX,\LAY,\LAZ) -- (\LBX,\LBY,\LBZ) --
+      (\LCX,\LCY,\LCZ) -- (\LDX,\LDY,\LDZ) -- cycle;
+  }
+
+  %-- Border of the d=0 central plane --
+  \pgfmathsetmacro{\BAX}{\PCX + \hs*\EAX + \hs*\EBX}
+  \pgfmathsetmacro{\BAY}{\PCY + \hs*\EAY + \hs*\EBY}
+  \pgfmathsetmacro{\BAZ}{\PCZ + \hs*\EAZ + \hs*\EBZ}
+  \pgfmathsetmacro{\BBX}{\PCX - \hs*\EAX + \hs*\EBX}
+  \pgfmathsetmacro{\BBY}{\PCY - \hs*\EAY + \hs*\EBY}
+  \pgfmathsetmacro{\BBZ}{\PCZ - \hs*\EAZ + \hs*\EBZ}
+  \pgfmathsetmacro{\BCX}{\PCX - \hs*\EAX - \hs*\EBX}
+  \pgfmathsetmacro{\BCY}{\PCY - \hs*\EAY - \hs*\EBY}
+  \pgfmathsetmacro{\BCZ}{\PCZ - \hs*\EAZ - \hs*\EBZ}
+  \pgfmathsetmacro{\BDX}{\PCX + \hs*\EAX - \hs*\EBX}
+  \pgfmathsetmacro{\BDY}{\PCY + \hs*\EAY - \hs*\EBY}
+  \pgfmathsetmacro{\BDZ}{\PCZ + \hs*\EAZ - \hs*\EBZ}
+  \draw[PlaneA!70!black, semithick]
+    (\BAX,\BAY,\BAZ) -- (\BBX,\BBY,\BBZ) --
+    (\BCX,\BCY,\BCZ) -- (\BDX,\BDY,\BDZ) -- cycle;
+
+  %-- Dashed normal axis through the plane centre --
+  \draw[black!35, thin, dashed]
+    ({\PCX-0.30*\GHX},{\PCY-0.30*\GHY},{\PCZ-0.30*\GHZ}) --
+    ({\PCX+0.30*\GHX},{\PCY+0.30*\GHY},{\PCZ+0.30*\GHZ});
+
+  %-- g-vector arrow --
+  \draw[-{Stealth[length=7pt,width=5pt]},very thick,GVecA]
+    (0,0,0) -- (\GX,\GY,\GZ)
+    node[above right,font=\normalsize]{$\vec{g}_i$};
+
+  \fill[black] (0,0,0) circle (1pt);
+
+\end{tikzpicture}
+
+\bigskip
+
+% ====================================================================
+% FIGURE 2 — three g-vectors (0, 120, 240 deg), three Gaussian planes,
+%            and the Cramer-Rao error ellipsoid at their intersection.
+%
+% Fisher info: F = sum_i g_i g_i^T = diag(3, 3/2, 3/2)  (3 equal weights)
+% Covariance:  Sigma = F^{-1} = diag(1/3, 2/3, 2/3)
+% Ellipsoid:   3 a0^2 + 1.5 a1^2 + 1.5 a2^2 = 1
+%              semi-axes: r0 = 1/sqrt(3) ~ 0.577,  r12 = sqrt(2/3) ~ 0.816
+% ====================================================================
+\tdplotsetmaincoords{65}{125}
+\begin{tikzpicture}[tdplot_main_coords, scale=2.1,
+    line cap=round, line join=round, font=\small]
+
+  \def\phs{0.48}    % half-size of each plane patch
+  \def\ptval{0.55}  % planes centred at ptval * g
+
+  %-- Axes --
+  \draw[->,thick,black!55] (0,0,0) -- (1.60,0,0) node[right]{$a_0$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,1.60,0) node[right]{$a_1$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,0,1.45) node[above]{$a_2$};
+
+  %-- Gaussian planes: drawn farthest first (240, 120, 0 for this view) --
+  \foreach \gAngle/\pcol in {240/PlaneC, 120/PlaneB, 0/PlaneA}{
+    \pgfmathsetmacro{\GHX}{1.0/sqrt(2)}
+    \pgfmathsetmacro{\GHY}{cos(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\GHZ}{sin(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\EAX}{0.0}
+    \pgfmathsetmacro{\EAY}{-sin(\gAngle)}
+    \pgfmathsetmacro{\EAZ}{cos(\gAngle)}
+    \pgfmathsetmacro{\EBX}{1.0/sqrt(2)}
+    \pgfmathsetmacro{\EBY}{-cos(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\EBZ}{-sin(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\PCX}{\ptval}
+    \pgfmathsetmacro{\PCY}{\ptval*cos(\gAngle)}
+    \pgfmathsetmacro{\PCZ}{\ptval*sin(\gAngle)}
+
+    \foreach \dVal/\fillop in {
+        -0.22/0.04, -0.14/0.17, -0.07/0.40,
+         0.00/0.65,
+         0.07/0.40,  0.14/0.17,  0.22/0.04}{
+      \pgfmathsetmacro{\OX}{\dVal*\GHX}
+      \pgfmathsetmacro{\OY}{\dVal*\GHY}
+      \pgfmathsetmacro{\OZ}{\dVal*\GHZ}
+      \pgfmathsetmacro{\LAX}{\PCX + \phs*\EAX + \phs*\EBX + \OX}
+      \pgfmathsetmacro{\LAY}{\PCY + \phs*\EAY + \phs*\EBY + \OY}
+      \pgfmathsetmacro{\LAZ}{\PCZ + \phs*\EAZ + \phs*\EBZ + \OZ}
+      \pgfmathsetmacro{\LBX}{\PCX - \phs*\EAX + \phs*\EBX + \OX}
+      \pgfmathsetmacro{\LBY}{\PCY - \phs*\EAY + \phs*\EBY + \OY}
+      \pgfmathsetmacro{\LBZ}{\PCZ - \phs*\EAZ + \phs*\EBZ + \OZ}
+      \pgfmathsetmacro{\LCX}{\PCX - \phs*\EAX - \phs*\EBX + \OX}
+      \pgfmathsetmacro{\LCY}{\PCY - \phs*\EAY - \phs*\EBY + \OY}
+      \pgfmathsetmacro{\LCZ}{\PCZ - \phs*\EAZ - \phs*\EBZ + \OZ}
+      \pgfmathsetmacro{\LDX}{\PCX + \phs*\EAX - \phs*\EBX + \OX}
+      \pgfmathsetmacro{\LDY}{\PCY + \phs*\EAY - \phs*\EBY + \OY}
+      \pgfmathsetmacro{\LDZ}{\PCZ + \phs*\EAZ - \phs*\EBZ + \OZ}
+      \fill[\pcol, fill opacity=\fillop]
+        (\LAX,\LAY,\LAZ) -- (\LBX,\LBY,\LBZ) --
+        (\LCX,\LCY,\LCZ) -- (\LDX,\LDY,\LDZ) -- cycle;
+    }
+
+    % border of the d=0 plane
+    \pgfmathsetmacro{\BAX}{\PCX + \phs*\EAX + \phs*\EBX}
+    \pgfmathsetmacro{\BAY}{\PCY + \phs*\EAY + \phs*\EBY}
+    \pgfmathsetmacro{\BAZ}{\PCZ + \phs*\EAZ + \phs*\EBZ}
+    \pgfmathsetmacro{\BBX}{\PCX - \phs*\EAX + \phs*\EBX}
+    \pgfmathsetmacro{\BBY}{\PCY - \phs*\EAY + \phs*\EBY}
+    \pgfmathsetmacro{\BBZ}{\PCZ - \phs*\EAZ + \phs*\EBZ}
+    \pgfmathsetmacro{\BCX}{\PCX - \phs*\EAX - \phs*\EBX}
+    \pgfmathsetmacro{\BCY}{\PCY - \phs*\EAY - \phs*\EBY}
+    \pgfmathsetmacro{\BCZ}{\PCZ - \phs*\EAZ - \phs*\EBZ}
+    \pgfmathsetmacro{\BDX}{\PCX + \phs*\EAX - \phs*\EBX}
+    \pgfmathsetmacro{\BDY}{\PCY + \phs*\EAY - \phs*\EBY}
+    \pgfmathsetmacro{\BDZ}{\PCZ + \phs*\EAZ - \phs*\EBZ}
+    \draw[\pcol!70!black, semithick]
+      (\BAX,\BAY,\BAZ) -- (\BBX,\BBY,\BBZ) --
+      (\BCX,\BCY,\BCZ) -- (\BDX,\BDY,\BDZ) -- cycle;
+  }
+
+  %-- g-vector arrows --
+  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecA]
+    (0,0,0) -- (1,1,0);
+  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecB]
+    (0,0,0) -- (1,-0.5,0.866);
+  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecC]
+    (0,0,0) -- (1,-0.5,-0.866);
+  \node[GVecA, above right] at (1,1,0)       {$\vec{g}_1$};
+  \node[GVecB, right]       at (1,-0.5,0.866){$\vec{g}_2$};
+  \node[GVecC, right]       at (1,-0.5,-0.866){$\vec{g}_3$};
+
+  %-- Cramer-Rao error ellipsoid --
+  %   r0=1/sqrt(3)~0.577 along a0,  r12=sqrt(2/3)~0.816 along a1,a2
+  \pgfmathsetmacro{\rZ}{1.0/sqrt(3)}
+  \pgfmathsetmacro{\rOne}{sqrt(2.0/3.0)}
+
+  % a0-a1 plane ellipse (a2=0), filled lightly
+  \draw[EllipCol, thick, fill=EllipCol!18, fill opacity=0.45,
+        domain=0:360, smooth, samples=60, variable=\aa]
+    plot ({\rZ*cos(\aa)},{\rOne*sin(\aa)},{0});
+  % a0-a2 plane ellipse (a1=0)
+  \draw[EllipCol, thick, fill=EllipCol!10, fill opacity=0.30,
+        domain=0:360, smooth, samples=60, variable=\aa]
+    plot ({\rZ*cos(\aa)},{0},{\rOne*sin(\aa)});
+  % a1-a2 circle (a0=0)
+  \draw[EllipCol!70!black, semithick, fill=EllipCol!08, fill opacity=0.20,
+        domain=0:360, smooth, samples=60, variable=\aa]
+    plot ({0},{\rOne*cos(\aa)},{\rOne*sin(\aa)});
+
+  % equator-like latitude line to hint at the 3-D surface
+  \pgfmathsetmacro{\latZ}{0.3*\rZ}
+  \pgfmathsetmacro{\latR}{sqrt(\rOne*\rOne*(1 - 0.09))}  % 0.09=0.3^2
+  \draw[EllipCol!50, thin, domain=0:360, smooth, samples=60, variable=\aa]
+    plot ({\latZ},{\latR*cos(\aa)},{\latR*sin(\aa)});
+
+  \fill[black] (0,0,0) circle (1pt);
+
+\end{tikzpicture}
+
+\end{document}
