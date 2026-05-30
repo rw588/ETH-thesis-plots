@@ -13,67 +13,72 @@
 \colorlet{PlaneA}{orange!90!red}
 \colorlet{PlaneB}{cyan!80!blue}
 \colorlet{PlaneC}{violet!65!blue}
-\colorlet{EllipCol}{blue!55!violet}
+\colorlet{EllipCol}{yellow!85!orange}
+\colorlet{CVecCol}{red!60!magenta}
 
 \begin{document}
 
 % ====================================================================
 % FIGURE 1 — one g-vector, cone/ring, single Gaussian constraint plane
-% g = (1, cos theta, sin theta), ring traces a circle at a0 = 1
+% Coordinate mapping: (x,y,z) = (a1, a2, a0)  so a0 points up (z-axis)
+% g = (1, cos theta, sin theta) in (a0,a1,a2) -> (cos theta, sin theta, 1) in (x,y,z)
+% Ring traces a horizontal circle at z=a0=1
 % ====================================================================
 \tdplotsetmaincoords{65}{125}
 \begin{tikzpicture}[tdplot_main_coords, scale=2.5,
     line cap=round, line join=round, font=\small]
 
   % g at theta=30 deg; |g|=sqrt(2)
+  % In (x,y,z)=(a1,a2,a0): g = (cos theta, sin theta, 1)
   \def\gTheta{30}
-  \pgfmathsetmacro{\GX}{1.0}
-  \pgfmathsetmacro{\GY}{cos(\gTheta)}
-  \pgfmathsetmacro{\GZ}{sin(\gTheta)}
-  % unit vector ghat
-  \pgfmathsetmacro{\GHX}{1.0/sqrt(2)}
-  \pgfmathsetmacro{\GHY}{cos(\gTheta)/sqrt(2)}
-  \pgfmathsetmacro{\GHZ}{sin(\gTheta)/sqrt(2)}
-  % two orthonormal vectors spanning the plane:
-  %   e1 = (0, -sin, cos),  e2 = (1/sqrt2, -cos/sqrt2, -sin/sqrt2)
-  \pgfmathsetmacro{\EAX}{0.0}
-  \pgfmathsetmacro{\EAY}{-sin(\gTheta)}
-  \pgfmathsetmacro{\EAZ}{cos(\gTheta)}
-  \pgfmathsetmacro{\EBX}{1.0/sqrt(2)}
-  \pgfmathsetmacro{\EBY}{-cos(\gTheta)/sqrt(2)}
-  \pgfmathsetmacro{\EBZ}{-sin(\gTheta)/sqrt(2)}
-  % plane centre at t=0.75 along g
-  \pgfmathsetmacro{\PCX}{0.75}
-  \pgfmathsetmacro{\PCY}{0.75*cos(\gTheta)}
-  \pgfmathsetmacro{\PCZ}{0.75*sin(\gTheta)}
+  \pgfmathsetmacro{\GX}{cos(\gTheta)}
+  \pgfmathsetmacro{\GY}{sin(\gTheta)}
+  \pgfmathsetmacro{\GZ}{1.0}
+  % unit vector ghat in (x,y,z)
+  \pgfmathsetmacro{\GHX}{cos(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\GHY}{sin(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\GHZ}{1.0/sqrt(2)}
+  % two orthonormal vectors spanning the plane (in new coords):
+  %   e1 = (-sin theta, cos theta, 0)
+  %   e2 = (-cos theta/sqrt2, -sin theta/sqrt2, 1/sqrt2)
+  \pgfmathsetmacro{\EAX}{-sin(\gTheta)}
+  \pgfmathsetmacro{\EAY}{cos(\gTheta)}
+  \pgfmathsetmacro{\EAZ}{0.0}
+  \pgfmathsetmacro{\EBX}{-cos(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\EBY}{-sin(\gTheta)/sqrt(2)}
+  \pgfmathsetmacro{\EBZ}{1.0/sqrt(2)}
+  % plane centre at t=0.75 along g (in new coords)
+  \pgfmathsetmacro{\PCX}{0.75*cos(\gTheta)}
+  \pgfmathsetmacro{\PCY}{0.75*sin(\gTheta)}
+  \pgfmathsetmacro{\PCZ}{0.75}
   \def\hs{0.55}   % half-size of visible plane patch
 
-  %-- Axes --
-  \draw[->,thick,black!55] (0,0,0) -- (1.75,0,0) node[right]{$a_0$};
-  \draw[->,thick,black!55] (0,0,0) -- (0,1.75,0) node[right]{$a_1$};
-  \draw[->,thick,black!55] (0,0,0) -- (0,0,1.55) node[above]{$a_2$};
+  %-- Axes: x=a1, y=a2, z=a0 --
+  \draw[->,thick,black!55] (0,0,0) -- (2.10,0,0) node[right=5pt]{$a_1$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,1.55,0) node[right=5pt]{$a_2$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,0,2.50) node[above=5pt]{$a_0$};
 
   %-- Cone lines origin -> ring --
   \foreach \cang in {0,30,...,330}{
-    \draw[ConeRing!20,very thin] (0,0,0) -- ({1},{cos(\cang)},{sin(\cang)});
+    \draw[ConeRing!20,very thin] (0,0,0) -- ({2*cos(\cang)},{2*sin(\cang)},{2});
   }
 
-  %-- Ring of possible g-vectors: (1, cos t, sin t) --
+  %-- Ring of possible g-vectors: 2*(cos t, sin t, 1) --
   \draw[ConeRing, thick, dashed,
         domain=0:360, smooth, samples=72, variable=\aa]
-    plot ({1},{cos(\aa)},{sin(\aa)});
+    plot ({2*cos(\aa)},{2*sin(\aa)},{2});
 
   %-- Gaussian constraint-plane layers back-to-front --
-  %   sigma~0.10; opacities ~ exp(-(d/0.1)^2/2)
+  %   sigma~0.10; opacities ~ exp(-(d/0.1)^2/2) / 7 (very low)
   %   For this view angle positive d is toward viewer
   \foreach \dVal/\fillop in {
-      -0.24/0.04,
-      -0.16/0.15,
-      -0.08/0.38,
-       0.00/0.70,
-       0.08/0.38,
-       0.16/0.15,
-       0.24/0.04}{
+      -0.24/0.006,
+      -0.16/0.02,
+      -0.08/0.05,
+       0.00/0.10,
+       0.08/0.05,
+       0.16/0.02,
+       0.24/0.006}{
     \pgfmathsetmacro{\OX}{\dVal*\GHX}
     \pgfmathsetmacro{\OY}{\dVal*\GHY}
     \pgfmathsetmacro{\OZ}{\dVal*\GHZ}
@@ -89,7 +94,7 @@
     \pgfmathsetmacro{\LDX}{\PCX + \hs*\EAX - \hs*\EBX + \OX}
     \pgfmathsetmacro{\LDY}{\PCY + \hs*\EAY - \hs*\EBY + \OY}
     \pgfmathsetmacro{\LDZ}{\PCZ + \hs*\EAZ - \hs*\EBZ + \OZ}
-    \fill[PlaneA, fill opacity=\fillop]
+    \fill[GVecA, fill opacity=\fillop]
       (\LAX,\LAY,\LAZ) -- (\LBX,\LBY,\LBZ) --
       (\LCX,\LCY,\LCZ) -- (\LDX,\LDY,\LDZ) -- cycle;
   }
@@ -107,7 +112,7 @@
   \pgfmathsetmacro{\BDX}{\PCX + \hs*\EAX - \hs*\EBX}
   \pgfmathsetmacro{\BDY}{\PCY + \hs*\EAY - \hs*\EBY}
   \pgfmathsetmacro{\BDZ}{\PCZ + \hs*\EAZ - \hs*\EBZ}
-  \draw[PlaneA!70!black, semithick]
+  \draw[GVecA!70!black, semithick]
     (\BAX,\BAY,\BAZ) -- (\BBX,\BBY,\BBZ) --
     (\BCX,\BCY,\BCZ) -- (\BDX,\BDY,\BDZ) -- cycle;
 
@@ -118,8 +123,22 @@
 
   %-- g-vector arrow --
   \draw[-{Stealth[length=7pt,width=5pt]},very thick,GVecA]
-    (0,0,0) -- (\GX,\GY,\GZ)
-    node[above right,font=\normalsize]{$\vec{g}_i$};
+    (0,0,0) -- ({2*\GX},{2*\GY},{2*\GZ})
+    node[above=5pt,font=\normalsize]{$\vec{g}_1$};
+
+  %-- Dot where the g-vector pierces its own plane (at t=0.75 along g) --
+  \fill[GVecA] (\PCX,\PCY,\PCZ) circle (2pt);
+
+  %-- C-optimality vector v=(0,a2,-a1) evaluated at the g-tip --
+  %   (a0,a1,a2)=(1,cos theta,sin theta) at tip
+  %   v=(0,sin theta,-cos theta) in (a0,a1,a2) = (sin theta,-cos theta,0) in (x,y,z)
+  %   tangent to the g-vector ring at the tip
+  \pgfmathsetmacro{\VX}{sin(\gTheta)}
+  \pgfmathsetmacro{\VY}{-cos(\gTheta)}
+  \draw[-{Stealth[length=6pt,width=4pt]},thick,CVecCol]
+    ({2*\GX},{2*\GY},{2*\GZ}) --
+    ({2*\GX+0.55*\VX},{2*\GY+0.55*\VY},{2*\GZ})
+    node[above=5pt]{$\vec{v}$};
 
   \fill[black] (0,0,0) circle (1pt);
 
@@ -134,39 +153,55 @@
 % Fisher info: F = sum_i g_i g_i^T = diag(3, 3/2, 3/2)  (3 equal weights)
 % Covariance:  Sigma = F^{-1} = diag(1/3, 2/3, 2/3)
 % Ellipsoid:   3 a0^2 + 1.5 a1^2 + 1.5 a2^2 = 1
-%              semi-axes: r0 = 1/sqrt(3) ~ 0.577,  r12 = sqrt(2/3) ~ 0.816
+%              semi-axes: r0 = 1/sqrt(3) ~ 0.577 (along a0),
+%                         r12 = sqrt(2/3) ~ 0.816 (along a1, a2)
+% Coordinate mapping: (x,y,z) = (a1, a2, a0)
 % ====================================================================
 \tdplotsetmaincoords{65}{125}
 \begin{tikzpicture}[tdplot_main_coords, scale=2.1,
     line cap=round, line join=round, font=\small]
 
-  \def\phs{0.48}    % half-size of each plane patch
+  \def\phs{0.96}    % half-size of each plane patch
   \def\ptval{0.55}  % planes centred at ptval * g
 
-  %-- Axes --
-  \draw[->,thick,black!55] (0,0,0) -- (1.60,0,0) node[right]{$a_0$};
-  \draw[->,thick,black!55] (0,0,0) -- (0,1.60,0) node[right]{$a_1$};
-  \draw[->,thick,black!55] (0,0,0) -- (0,0,1.45) node[above]{$a_2$};
+  %-- Axes: x=a1, y=a2, z=a0 --
+  \draw[->,thick,black!55] (0,0,0) -- (2.30,0,0) node[right=5pt]{$a_1$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,1.95,0) node[right=5pt]{$a_2$};
+  \draw[->,thick,black!55] (0,0,0) -- (0,0,2.50) node[above=5pt]{$a_0$};
 
-  %-- Gaussian planes: drawn farthest first (240, 120, 0 for this view) --
-  \foreach \gAngle/\pcol in {240/PlaneC, 120/PlaneB, 0/PlaneA}{
-    \pgfmathsetmacro{\GHX}{1.0/sqrt(2)}
-    \pgfmathsetmacro{\GHY}{cos(\gAngle)/sqrt(2)}
-    \pgfmathsetmacro{\GHZ}{sin(\gAngle)/sqrt(2)}
-    \pgfmathsetmacro{\EAX}{0.0}
-    \pgfmathsetmacro{\EAY}{-sin(\gAngle)}
-    \pgfmathsetmacro{\EAZ}{cos(\gAngle)}
-    \pgfmathsetmacro{\EBX}{1.0/sqrt(2)}
-    \pgfmathsetmacro{\EBY}{-cos(\gAngle)/sqrt(2)}
-    \pgfmathsetmacro{\EBZ}{-sin(\gAngle)/sqrt(2)}
-    \pgfmathsetmacro{\PCX}{\ptval}
-    \pgfmathsetmacro{\PCY}{\ptval*cos(\gAngle)}
-    \pgfmathsetmacro{\PCZ}{\ptval*sin(\gAngle)}
+  %-- Ring joining the tips of the g-vectors at z=2 --
+  \draw[ConeRing, thick, dashed,
+        domain=0:360, smooth, samples=72, variable=\aa]
+    plot ({2*cos(\aa)},{2*sin(\aa)},{2});
+
+  % Intersection of the 3 planes: a0=2t, a1=a2=0 => (x,y,z)=(0,0,2t)
+  % Centre each plane patch there so the crossing point is always visible
+  \pgfmathsetmacro{\ez}{2.0*\ptval}
+
+  %-- Gaussian planes: depth order for this view: theta=0 farthest, then 240, then 120 --
+  %   plane colour = g-vector colour for each plane
+  \foreach \gAngle/\pcol in {0/GVecA, 240/GVecC, 120/GVecB}{
+    % g = (cos theta, sin theta, 1) in (x,y,z)
+    \pgfmathsetmacro{\GHX}{cos(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\GHY}{sin(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\GHZ}{1.0/sqrt(2)}
+    % e1 = (-sin theta, cos theta, 0)
+    % e2 = (-cos theta/sqrt2, -sin theta/sqrt2, 1/sqrt2)
+    \pgfmathsetmacro{\EAX}{-sin(\gAngle)}
+    \pgfmathsetmacro{\EAY}{cos(\gAngle)}
+    \pgfmathsetmacro{\EAZ}{0.0}
+    \pgfmathsetmacro{\EBX}{-cos(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\EBY}{-sin(\gAngle)/sqrt(2)}
+    \pgfmathsetmacro{\EBZ}{1.0/sqrt(2)}
+    % centre patch at the intersection point so the crossing is always inside
+    \pgfmathsetmacro{\PCX}{0.0}
+    \pgfmathsetmacro{\PCY}{0.0}
+    \pgfmathsetmacro{\PCZ}{\ez}
 
     \foreach \dVal/\fillop in {
-        -0.22/0.04, -0.14/0.17, -0.07/0.40,
-         0.00/0.65,
-         0.07/0.40,  0.14/0.17,  0.22/0.04}{
+        -0.22/0.001, -0.14/0.006, -0.07/0.012,
+         0.00/0.020,
+         0.07/0.012,  0.14/0.006,  0.22/0.001}{
       \pgfmathsetmacro{\OX}{\dVal*\GHX}
       \pgfmathsetmacro{\OY}{\dVal*\GHY}
       \pgfmathsetmacro{\OZ}{\dVal*\GHZ}
@@ -205,40 +240,52 @@
       (\BCX,\BCY,\BCZ) -- (\BDX,\BDY,\BDZ) -- cycle;
   }
 
-  %-- g-vector arrows --
-  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecA]
-    (0,0,0) -- (1,1,0);
-  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecB]
-    (0,0,0) -- (1,-0.5,0.866);
-  \draw[-{Stealth[length=6pt,width=4pt]},thick,GVecC]
-    (0,0,0) -- (1,-0.5,-0.866);
-  \node[GVecA, above right] at (1,1,0)       {$\vec{g}_1$};
-  \node[GVecB, right]       at (1,-0.5,0.866){$\vec{g}_2$};
-  \node[GVecC, right]       at (1,-0.5,-0.866){$\vec{g}_3$};
-
-  %-- Cramer-Rao error ellipsoid --
-  %   r0=1/sqrt(3)~0.577 along a0,  r12=sqrt(2/3)~0.816 along a1,a2
+  %-- Cramer-Rao error ellipsoid drawn first so g arrows render on top --
+  %   rZ = 1/sqrt(3) ~ 0.577 along z=a0 (shorter axis)
+  %   rOne = sqrt(2/3) ~ 0.816 along x=a1, y=a2 (longer axes)
   \pgfmathsetmacro{\rZ}{1.0/sqrt(3)}
   \pgfmathsetmacro{\rOne}{sqrt(2.0/3.0)}
 
-  % a0-a1 plane ellipse (a2=0), filled lightly
-  \draw[EllipCol, thick, fill=EllipCol!18, fill opacity=0.45,
+  % Shaded ellipsoid: stacked filled latitude discs (back to front) + equatorial outline
+  \foreach \phiDeg/\fillop in {
+      -80/0.03, -65/0.05, -50/0.07, -35/0.09,
+      -20/0.11,  -5/0.13,  10/0.14,  25/0.13,
+       40/0.11,  55/0.09,  70/0.06,  85/0.03}{
+    \pgfmathsetmacro{\latR}{\rOne*cos(\phiDeg)}
+    \pgfmathsetmacro{\latZ}{\ez+\rZ*sin(\phiDeg)}
+    \draw[EllipCol, draw opacity=0, fill=EllipCol, fill opacity=\fillop,
+          domain=0:360, smooth, samples=36, variable=\aa]
+      plot ({\latR*cos(\aa)},{\latR*sin(\aa)},{\latZ});
+  }
+  \draw[EllipCol!80!black, semithick,
         domain=0:360, smooth, samples=60, variable=\aa]
-    plot ({\rZ*cos(\aa)},{\rOne*sin(\aa)},{0});
-  % a0-a2 plane ellipse (a1=0)
-  \draw[EllipCol, thick, fill=EllipCol!10, fill opacity=0.30,
-        domain=0:360, smooth, samples=60, variable=\aa]
-    plot ({\rZ*cos(\aa)},{0},{\rOne*sin(\aa)});
-  % a1-a2 circle (a0=0)
-  \draw[EllipCol!70!black, semithick, fill=EllipCol!08, fill opacity=0.20,
-        domain=0:360, smooth, samples=60, variable=\aa]
-    plot ({0},{\rOne*cos(\aa)},{\rOne*sin(\aa)});
+    plot ({\rOne*cos(\aa)},{\rOne*sin(\aa)},{\ez});
 
-  % equator-like latitude line to hint at the 3-D surface
-  \pgfmathsetmacro{\latZ}{0.3*\rZ}
-  \pgfmathsetmacro{\latR}{sqrt(\rOne*\rOne*(1 - 0.09))}  % 0.09=0.3^2
-  \draw[EllipCol!50, thin, domain=0:360, smooth, samples=60, variable=\aa]
-    plot ({\latZ},{\latR*cos(\aa)},{\latR*sin(\aa)});
+  % dot at intersection / ellipsoid centre
+  \fill[EllipCol!80!black] (0,0,\ez) circle (1.5pt);
+
+  %-- g-vector arrows and crossing dots --
+  \foreach \gAngle/\gcol/\glab/\glabpos in {
+      0/GVecA/{\vec{g}_1}/{above},
+    120/GVecB/{\vec{g}_2}/{above left},
+    240/GVecC/{\vec{g}_3}/{below left}}{
+    \pgfmathsetmacro{\GTIPX}{cos(\gAngle)}
+    \pgfmathsetmacro{\GTIPY}{sin(\gAngle)}
+    \draw[-{Stealth[length=6pt,width=4pt]},thick,\gcol]
+      (0,0,0) -- ({2*\GTIPX},{2*\GTIPY},{2})
+      node[\glabpos]{$\glab$};
+    % dot where this g-vector pierces its own plane
+    \pgfmathsetmacro{\dotx}{\ptval*cos(\gAngle)}
+    \pgfmathsetmacro{\doty}{\ptval*sin(\gAngle)}
+    \fill[\gcol] (\dotx,\doty,\ptval) circle (2pt);
+  }
+
+  %-- Single C-optimality vector from ellipsoid centre --
+  %   same direction as Fig 1: v=(0,sin30,-cos30) in (a0,a1,a2)
+  %   = (sin30,-cos30,0) in (x,y,z) = (0.5,-0.866,0)
+  \draw[-{Stealth[length=6pt,width=4pt]},thick,CVecCol]
+    (0,0,\ez) -- ({1.35*sin(30)},{-1.35*cos(30)},\ez)
+    node[left=5pt]{$\vec{v}$};
 
   \fill[black] (0,0,0) circle (1pt);
 
